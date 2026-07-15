@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - policies/best-practices/auto-vpa.yaml
   - policies/flux/enforce-flux-best-practices.yaml
+  - policies/flux/helm-release-install-crds.yaml

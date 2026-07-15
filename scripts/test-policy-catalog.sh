@@ -5,6 +5,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 policy="${repo_root}/policies/best-practices/auto-vpa.yaml"
 flux_policy="${repo_root}/policies/flux/enforce-flux-best-practices.yaml"
+helm_crds_policy="${repo_root}/policies/flux/helm-release-install-crds.yaml"
 
 if [[ ! -f "${policy}" ]]; then
   echo "FAIL: shared catalog is missing policies/best-practices/auto-vpa.yaml" >&2
@@ -13,6 +14,125 @@ fi
 
 if [[ ! -f "${flux_policy}" ]]; then
   echo "FAIL: shared catalog is missing policies/flux/enforce-flux-best-practices.yaml" >&2
+  exit 1
+fi
+
+if [[ ! -f "${helm_crds_policy}" ]]; then
+  echo "FAIL: shared catalog is missing policies/flux/helm-release-install-crds.yaml" >&2
+  exit 1
+fi
+
+helm_crds_rule_count="$(yq '.spec.rules | length' "${helm_crds_policy}")"
+helm_crds_required_rule_count="$(
+  yq '[.spec.rules[].name | select(. == "set-helm-release-install-crds")] | length' \
+    "${helm_crds_policy}"
+)"
+helm_crds_background="$(yq '.spec.background' "${helm_crds_policy}")"
+helm_crds_rule_key_count="$(yq '.spec.rules[0] | keys | length' "${helm_crds_policy}")"
+helm_crds_match_branch_count="$(yq '.spec.rules[0].match.any | length' "${helm_crds_policy}")"
+helm_crds_resource_match_key_count="$(
+  yq '.spec.rules[0].match.any[0].resources | keys | length' "${helm_crds_policy}"
+)"
+helm_crds_kind_count="$(
+  yq '.spec.rules[0].match.any[0].resources.kinds | length' "${helm_crds_policy}"
+)"
+helm_crds_kind="$(yq '.spec.rules[0].match.any[0].resources.kinds[0]' "${helm_crds_policy}")"
+helm_crds_operation_count="$(
+  yq '.spec.rules[0].match.any[0].resources.operations | length' "${helm_crds_policy}"
+)"
+helm_crds_create_operation_count="$(
+  yq '[.spec.rules[0].match.any[0].resources.operations[] | select(. == "CREATE")] | length' \
+    "${helm_crds_policy}"
+)"
+helm_crds_update_operation_count="$(
+  yq '[.spec.rules[0].match.any[0].resources.operations[] | select(. == "UPDATE")] | length' \
+    "${helm_crds_policy}"
+)"
+helm_crds_selector_key_count="$(
+  yq '.spec.rules[0].match.any[0].resources.selector | keys | length' "${helm_crds_policy}"
+)"
+helm_crds_selector_label_count="$(
+  yq '.spec.rules[0].match.any[0].resources.selector.matchLabels | length' "${helm_crds_policy}"
+)"
+helm_crds_selector="$(
+  yq '.spec.rules[0].match.any[0].resources.selector.matchLabels."helm.toolkit.fluxcd.io/crds"' \
+    "${helm_crds_policy}"
+)"
+helm_crds_selector_expression_count="$(
+  yq '.spec.rules[0].match.any[0].resources.selector.matchExpressions // [] | length' \
+    "${helm_crds_policy}"
+)"
+helm_crds_mutate_key_count="$(yq '.spec.rules[0].mutate | keys | length' "${helm_crds_policy}")"
+helm_crds_patch_key_count="$(
+  yq '.spec.rules[0].mutate.patchStrategicMerge | keys | length' "${helm_crds_policy}"
+)"
+helm_crds_patch_spec_key_count="$(
+  yq '.spec.rules[0].mutate.patchStrategicMerge.spec | keys | length' "${helm_crds_policy}"
+)"
+helm_crds_install_key_count="$(
+  yq '.spec.rules[0].mutate.patchStrategicMerge.spec.install | keys | length' "${helm_crds_policy}"
+)"
+helm_crds_upgrade_key_count="$(
+  yq '.spec.rules[0].mutate.patchStrategicMerge.spec.upgrade | keys | length' "${helm_crds_policy}"
+)"
+helm_crds_install_value="$(
+  yq '.spec.rules[0].mutate.patchStrategicMerge.spec.install.crds' "${helm_crds_policy}"
+)"
+helm_crds_upgrade_value="$(
+  yq '.spec.rules[0].mutate.patchStrategicMerge.spec.upgrade.crds' "${helm_crds_policy}"
+)"
+helm_crds_minversion="$(
+  yq '.metadata.annotations."policies.kyverno.io/minversion"' "${helm_crds_policy}"
+)"
+helm_crds_catalog_entry_count="$(
+  yq '[.resources[] | select(. == "policies/flux/helm-release-install-crds.yaml")] | length' \
+    "${repo_root}/kustomization.yaml"
+)"
+
+if [[ "${helm_crds_rule_count}" -ne 1 || "${helm_crds_required_rule_count}" -ne 1 ]]; then
+  echo "FAIL: shared Helm CRD policy must expose only the set-helm-release-install-crds rule" >&2
+  exit 1
+fi
+
+if [[ "${helm_crds_background}" != "false" || "${helm_crds_rule_key_count}" -ne 3 ]]; then
+  echo "FAIL: shared Helm CRD policy must contain only one admission-time rule" >&2
+  exit 1
+fi
+
+if [[ "${helm_crds_match_branch_count}" -ne 1 || "${helm_crds_resource_match_key_count}" -ne 3 ||
+  "${helm_crds_kind_count}" -ne 1 ||
+  "${helm_crds_kind}" != "helm.toolkit.fluxcd.io/v2/HelmRelease" ]]; then
+  echo "FAIL: shared Helm CRD policy must match only the served HelmRelease v2 API" >&2
+  exit 1
+fi
+
+if [[ "${helm_crds_operation_count}" -ne 2 || "${helm_crds_create_operation_count}" -ne 1 ||
+  "${helm_crds_update_operation_count}" -ne 1 ]]; then
+  echo "FAIL: shared Helm CRD policy must mutate only create and update admissions" >&2
+  exit 1
+fi
+
+if [[ "${helm_crds_selector_key_count}" -ne 1 || "${helm_crds_selector_label_count}" -ne 1 ||
+  "${helm_crds_selector_expression_count}" -ne 0 || "${helm_crds_selector}" != "enabled" ]]; then
+  echo "FAIL: shared Helm CRD policy must use only the documented opt-in label" >&2
+  exit 1
+fi
+
+if [[ "${helm_crds_mutate_key_count}" -ne 1 || "${helm_crds_patch_key_count}" -ne 1 ||
+  "${helm_crds_patch_spec_key_count}" -ne 2 || "${helm_crds_install_key_count}" -ne 1 ||
+  "${helm_crds_upgrade_key_count}" -ne 1 || "${helm_crds_install_value}" != "CreateReplace" ||
+  "${helm_crds_upgrade_value}" != "CreateReplace" ]]; then
+  echo "FAIL: shared Helm CRD policy must mutate only install and upgrade CRD strategies" >&2
+  exit 1
+fi
+
+if [[ "${helm_crds_minversion}" != "1.18.0" ]]; then
+  echo "FAIL: shared Helm CRD policy must declare the catalog's Kyverno 1.18.0 floor" >&2
+  exit 1
+fi
+
+if [[ "${helm_crds_catalog_entry_count}" -ne 1 ]]; then
+  echo "FAIL: shared Helm CRD policy must be registered exactly once in the root catalog" >&2
   exit 1
 fi
 
@@ -94,6 +214,11 @@ kyverno test "${repo_root}/tests/auto-vpa" \
   --remove-color
 
 kyverno test "${repo_root}/tests/enforce-flux-best-practices" \
+  --require-tests \
+  --detailed-results \
+  --remove-color
+
+kyverno test "${repo_root}/tests/helm-release-install-crds" \
   --require-tests \
   --detailed-results \
   --remove-color
