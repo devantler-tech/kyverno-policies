@@ -1,0 +1,106 @@
+---
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: enforce-flux-best-practices-validates-reliability-settings
+policies:
+  - ../../policies/flux/enforce-flux-best-practices.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: enforce-flux-best-practices
+    rule: kustomization-recommended-settings
+    resources:
+      - apps/valid-kustomization
+    result: pass
+  - policy: enforce-flux-best-practices
+    rule: kustomization-recommended-settings
+    resources:
+      - apps/missing-kustomization-interval
+      - apps/missing-kustomization-timeout
+      - apps/missing-kustomization-retry-interval
+      - apps/false-kustomization-prune
+      - apps/false-kustomization-wait
+      - apps/missing-kustomization-source-kind
+      - apps/missing-kustomization-source-name
+      - flux-system/flux-system
+    result: fail
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-reconciliation-settings
+    resources:
+      - apps/valid-finite-remediation
+      - apps/valid-infinite-remediation
+      - apps/valid-retry-on-failure
+    result: pass
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-reconciliation-settings
+    resources:
+      - apps/missing-helmrelease-interval
+      - apps/missing-helmrelease-timeout
+    result: fail
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-install-failure-handling
+    resources:
+      - apps/valid-finite-remediation
+      - apps/valid-infinite-remediation
+      - apps/valid-retry-on-failure
+    result: pass
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-install-failure-handling
+    resources:
+      - apps/zero-install-remediation
+      - apps/noncanonical-negative-install-remediation
+      - apps/missing-install-failure-handling
+    result: fail
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-upgrade-failure-handling
+    resources:
+      - apps/valid-finite-remediation
+      - apps/valid-infinite-remediation
+      - apps/valid-retry-on-failure
+    result: pass
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-upgrade-failure-handling
+    resources:
+      - apps/zero-upgrade-remediation
+      - apps/disabled-last-failure-remediation
+      - apps/missing-upgrade-failure-handling
+    result: fail
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-reconciliation-settings
+    resources:
+      - apps/legacy-v2beta1-helmrelease
+      - apps/legacy-v2beta2-helmrelease
+    result: skip
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-install-failure-handling
+    resources:
+      - apps/legacy-v2beta1-helmrelease
+      - apps/legacy-v2beta2-helmrelease
+    result: skip
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-upgrade-failure-handling
+    resources:
+      - apps/legacy-v2beta1-helmrelease
+      - apps/legacy-v2beta2-helmrelease
+    result: skip
+  - policy: enforce-flux-best-practices
+    rule: kustomization-recommended-settings
+    resources:
+      - flux-system/catalog-source
+    result: skip
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-reconciliation-settings
+    resources:
+      - flux-system/catalog-source
+    result: skip
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-install-failure-handling
+    resources:
+      - flux-system/catalog-source
+    result: skip
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-upgrade-failure-handling
+    resources:
+      - flux-system/catalog-source
+    result: skip

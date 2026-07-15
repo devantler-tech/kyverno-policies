@@ -1,0 +1,336 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: valid-kustomization
+  namespace: apps
+spec:
+  interval: 10m
+  timeout: 5m
+  retryInterval: 2m
+  prune: true
+  wait: true
+  sourceRef:
+    kind: OCIRepository
+    name: platform
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: missing-kustomization-interval
+  namespace: apps
+spec:
+  timeout: 5m
+  retryInterval: 2m
+  prune: true
+  wait: true
+  sourceRef:
+    kind: OCIRepository
+    name: platform
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: missing-kustomization-timeout
+  namespace: apps
+spec:
+  interval: 10m
+  retryInterval: 2m
+  prune: true
+  wait: true
+  sourceRef:
+    kind: OCIRepository
+    name: platform
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: missing-kustomization-retry-interval
+  namespace: apps
+spec:
+  interval: 10m
+  timeout: 5m
+  prune: true
+  wait: true
+  sourceRef:
+    kind: OCIRepository
+    name: platform
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: false-kustomization-prune
+  namespace: apps
+spec:
+  interval: 10m
+  timeout: 5m
+  retryInterval: 2m
+  prune: false
+  wait: true
+  sourceRef:
+    kind: OCIRepository
+    name: platform
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: false-kustomization-wait
+  namespace: apps
+spec:
+  interval: 10m
+  timeout: 5m
+  retryInterval: 2m
+  prune: true
+  wait: false
+  sourceRef:
+    kind: OCIRepository
+    name: platform
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: missing-kustomization-source-kind
+  namespace: apps
+spec:
+  interval: 10m
+  timeout: 5m
+  retryInterval: 2m
+  prune: true
+  wait: true
+  sourceRef:
+    name: platform
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: missing-kustomization-source-name
+  namespace: apps
+spec:
+  interval: 10m
+  timeout: 5m
+  retryInterval: 2m
+  prune: true
+  wait: true
+  sourceRef:
+    kind: OCIRepository
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 10m
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: valid-finite-remediation
+  namespace: apps
+spec:
+  interval: 30m
+  timeout: 10m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: valid-infinite-remediation
+  namespace: apps
+spec:
+  interval: 30m
+  timeout: 10m
+  install:
+    remediation:
+      retries: -1
+  upgrade:
+    remediation:
+      retries: -1
+      remediateLastFailure: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: valid-retry-on-failure
+  namespace: apps
+spec:
+  interval: 30m
+  timeout: 10m
+  install:
+    strategy:
+      name: RetryOnFailure
+      retryInterval: 5m
+  upgrade:
+    strategy:
+      name: RetryOnFailure
+      retryInterval: 5m
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: missing-helmrelease-interval
+  namespace: apps
+spec:
+  timeout: 10m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: missing-helmrelease-timeout
+  namespace: apps
+spec:
+  interval: 30m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: zero-install-remediation
+  namespace: apps
+spec:
+  interval: 30m
+  timeout: 10m
+  install:
+    remediation:
+      retries: 0
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: zero-upgrade-remediation
+  namespace: apps
+spec:
+  interval: 30m
+  timeout: 10m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 0
+      remediateLastFailure: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: disabled-last-failure-remediation
+  namespace: apps
+spec:
+  interval: 30m
+  timeout: 10m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: false
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: missing-install-failure-handling
+  namespace: apps
+spec:
+  interval: 30m
+  timeout: 10m
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: missing-upgrade-failure-handling
+  namespace: apps
+spec:
+  interval: 30m
+  timeout: 10m
+  install:
+    remediation:
+      retries: 3
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: noncanonical-negative-install-remediation
+  namespace: apps
+spec:
+  interval: 30m
+  timeout: 10m
+  install:
+    remediation:
+      retries: -2
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: legacy-v2beta1-helmrelease
+  namespace: apps
+spec:
+  interval: 30m
+  timeout: 10m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta2
+kind: HelmRelease
+metadata:
+  name: legacy-v2beta2-helmrelease
+  namespace: apps
+spec:
+  interval: 30m
+  timeout: 10m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: catalog-source
+  namespace: flux-system
+spec:
+  interval: 10m
+  url: https://example.com/catalog.git
