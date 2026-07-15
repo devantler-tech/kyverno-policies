@@ -1,0 +1,31 @@
+---
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: auto-vpa-generates-bounded-workload-policies
+policies:
+  - ../../policies/best-practices/auto-vpa.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: auto-vpa
+    rule: generate-vpa-for-deployment
+    resources:
+      - test/web
+    generatedResource: generated-deployment-vpa.yaml
+    kind: Deployment
+    result: pass
+  - policy: auto-vpa
+    rule: generate-vpa-for-statefulset
+    resources:
+      - test/database
+    generatedResource: generated-statefulset-vpa.yaml
+    kind: StatefulSet
+    result: pass
+  - policy: auto-vpa
+    rule: generate-vpa-for-daemonset
+    resources:
+      - test/node-agent
+    generatedResource: generated-daemonset-vpa.yaml
+    kind: DaemonSet
+    result: pass
