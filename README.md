@@ -12,6 +12,7 @@ change.
 | Policy | Behavior | Prerequisites |
 |---|---|---|
 | [`auto-vpa`](policies/best-practices/auto-vpa.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.18+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
+| [`enforce-flux-best-practices`](policies/best-practices/enforce-flux-best-practices.yaml) | Validates that Flux `Kustomization` and `HelmRelease` resources declare the reliability fields recommended by the Flux docs | Kyverno 1.6+ and the Flux `kustomize`/`helm` controller CRDs installed in the cluster |
 
 ## Render the catalog
 
@@ -57,6 +58,28 @@ Important operating constraints:
   known collision risk tracked in [issue #2](https://github.com/devantler-tech/kyverno-policies/issues/2).
 - The first shared version deliberately retains the consumers' classic `ClusterPolicy` API. Migration to
   `GeneratingPolicy` is tracked in [issue #1](https://github.com/devantler-tech/kyverno-policies/issues/1).
+
+## Enforce Flux best practices behavior
+
+`enforce-flux-best-practices` is an admission-check (validate) policy. It asserts that Flux resources
+declare the reliability-critical fields recommended by the Flux documentation, catching a misconfigured
+resource at admission instead of at the next runtime failure.
+
+| Resource | Required fields |
+|---|---|
+| `Kustomization` | `spec.interval`, `spec.timeout`, `spec.retryInterval`, `spec.prune: true`, `spec.wait: true`, `spec.sourceRef` |
+| `HelmRelease` | `spec.interval`, `spec.timeout`, install + upgrade `remediation.retries` (`>=1` or `-1`), and `spec.upgrade.remediation.remediateLastFailure: true` |
+
+Important operating constraints:
+
+- The policy ships in `Audit` (report-only). It is inert until a consumer references it, and flipping it
+  to `Enforce` is the consumer's rollout decision, taken once a clean cluster scan confirms nothing trips
+  it. Enforcing directly from the shared library would block admissions in every consumer at once.
+- The bootstrap `flux-system` Kustomization (namespace and name `flux-system`) is excluded because it is
+  created and managed by `flux bootstrap` / ksail rather than by GitOps, so the recommended fields cannot
+  be set on it. This exclusion is generic to every Flux installation.
+- The `HelmRelease` rule matches the `v2`, `v2beta2`, and `v2beta1` API versions. The Flux controller CRDs
+  must be installed for the policy to match; Kyverno's global resource filters still apply.
 
 ## Validate changes
 

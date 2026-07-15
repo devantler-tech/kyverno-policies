@@ -1,0 +1,83 @@
+---
+# Compliant Kustomization: declares every recommended reliability field.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: compliant-kustomization
+  namespace: test
+spec:
+  interval: 10m
+  timeout: 5m
+  retryInterval: 2m
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./apps
+---
+# Non-compliant Kustomization: missing timeout, retryInterval, prune, and wait.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: incomplete-kustomization
+  namespace: test
+spec:
+  interval: 10m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./apps
+---
+# Bootstrap Kustomization: intentionally missing the recommended fields but
+# excluded from the policy because it is managed by `flux bootstrap` / ksail.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 10m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./clusters
+---
+# Compliant HelmRelease: declares interval, timeout, and install + upgrade
+# remediation with remediateLastFailure.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: compliant-helmrelease
+  namespace: test
+spec:
+  interval: 10m
+  timeout: 5m
+  chart:
+    spec:
+      chart: podinfo
+      sourceRef:
+        kind: HelmRepository
+        name: podinfo
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+---
+# Non-compliant HelmRelease: missing timeout and install/upgrade remediation.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: incomplete-helmrelease
+  namespace: test
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: podinfo
+      sourceRef:
+        kind: HelmRepository
+        name: podinfo
