@@ -43,8 +43,9 @@ spec:
     name: flux-system
   path: ./clusters
 ---
-# Compliant HelmRelease: declares interval, timeout, and install + upgrade
-# remediation with remediateLastFailure.
+# Compliant HelmRelease (remediation form): install + upgrade remediation
+# retries. timeout and remediateLastFailure are intentionally omitted to prove
+# they are not required.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -52,7 +53,6 @@ metadata:
   namespace: test
 spec:
   interval: 10m
-  timeout: 5m
   chart:
     spec:
       chart: podinfo
@@ -65,7 +65,30 @@ spec:
   upgrade:
     remediation:
       retries: 3
-      remediateLastFailure: true
+---
+# Compliant HelmRelease (strategy form): the current Flux recommended
+# RetryOnFailure strategy for install and upgrade, no timeout.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: compliant-strategy-helmrelease
+  namespace: test
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: podinfo
+      sourceRef:
+        kind: HelmRepository
+        name: podinfo
+  install:
+    strategy:
+      name: RetryOnFailure
+    retryInterval: 5m
+  upgrade:
+    strategy:
+      name: RetryOnFailure
+    retryInterval: 5m
 ---
 # Non-compliant HelmRelease: missing timeout and install/upgrade remediation.
 apiVersion: helm.toolkit.fluxcd.io/v2

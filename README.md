@@ -68,7 +68,7 @@ resource at admission instead of at the next runtime failure.
 | Resource | Required fields |
 |---|---|
 | `Kustomization` | `spec.interval`, `spec.timeout`, `spec.retryInterval`, `spec.prune: true`, `spec.wait: true`, `spec.sourceRef` |
-| `HelmRelease` | `spec.interval`, `spec.timeout`, install + upgrade `remediation.retries` (`>=1` or `-1`), and `spec.upgrade.remediation.remediateLastFailure: true` |
+| `HelmRelease` | `spec.interval` and, for both install and upgrade, a retry mechanism — either `strategy.name: RetryOnFailure` or `remediation.retries` (`>=1` or `-1`) |
 
 Important operating constraints:
 

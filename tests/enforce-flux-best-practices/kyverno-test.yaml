@@ -35,6 +35,12 @@ results:
   - policy: enforce-flux-best-practices
     rule: helmrelease-recommended-settings
     resources:
+      - test/compliant-strategy-helmrelease
+    kind: HelmRelease
+    result: pass
+  - policy: enforce-flux-best-practices
+    rule: helmrelease-recommended-settings
+    resources:
       - test/incomplete-helmrelease
     kind: HelmRelease
     result: fail

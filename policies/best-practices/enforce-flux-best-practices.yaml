@@ -68,18 +68,45 @@ spec:
                 - helm.toolkit.fluxcd.io/v2beta1/HelmRelease
       validate:
         message: >-
-          Flux HelmRelease must set the recommended reliability fields:
-          `spec.interval`, `spec.timeout`, install + upgrade remediation
-          retries, and `spec.upgrade.remediation.remediateLastFailure: true`.
-          See https://fluxcd.io/flux/components/helm/helmreleases/.
-        pattern:
-          spec:
-            interval: "?*"
-            timeout: "?*"
-            install:
-              remediation:
-                retries: ">=1 | -1"
-            upgrade:
-              remediation:
-                retries: ">=1 | -1"
-                remediateLastFailure: true
+          Flux HelmRelease must declare `spec.interval` and a retry mechanism
+          for both install and upgrade — either `strategy.name: RetryOnFailure`
+          or `remediation.retries` (`>=1` or `-1`). `timeout` is optional (the
+          controller defaults it) and `remediateLastFailure` defaults to true
+          once retries are set, so neither is required here.
+          See https://fluxcd.io/flux/components/helm/helmreleases/#recommended-settings.
+        # anyPattern accepts either retry form (RetryOnFailure strategy or
+        # remediation.retries) independently for install and upgrade, matching
+        # every shape the Flux recommended settings sanction.
+        anyPattern:
+          - spec:
+              interval: "?*"
+              install:
+                strategy:
+                  name: RetryOnFailure
+              upgrade:
+                strategy:
+                  name: RetryOnFailure
+          - spec:
+              interval: "?*"
+              install:
+                strategy:
+                  name: RetryOnFailure
+              upgrade:
+                remediation:
+                  retries: ">=1 | -1"
+          - spec:
+              interval: "?*"
+              install:
+                remediation:
+                  retries: ">=1 | -1"
+              upgrade:
+                strategy:
+                  name: RetryOnFailure
+          - spec:
+              interval: "?*"
+              install:
+                remediation:
+                  retries: ">=1 | -1"
+              upgrade:
+                remediation:
+                  retries: ">=1 | -1"
