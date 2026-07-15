@@ -114,8 +114,9 @@ This is an admission mutation, not a mutate-existing rule. A HelmRelease that al
 consumer adopts the policy must pass through a subsequent create or update admission request before the
 mutation applies. Kyverno's global admission filters still win, so a filtered HelmRelease remains
 unreachable by this policy. Enabling Helm tests makes test failures participate in the Helm action's
-remediation by default; consumers can retain `spec.test.ignoreFailures: true` when a failure should not
-affect readiness. The shared policy contains no environment-specific exclusions.
+remediation by default. `spec.test.ignoreFailures` supplies the shared default for whether failures affect
+readiness, but install- and upgrade-specific `remediation.ignoreTestFailures` values override it for their
+respective actions. The shared policy contains no environment-specific exclusions.
 
 Consumers replacing a local policy with the same name should pin an immutable catalog revision, remove
 the local definition without overlapping ownership, validate every affected overlay, and reapply opted-in
