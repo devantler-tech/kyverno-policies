@@ -13,6 +13,7 @@ change.
 |---|---|---|
 | [`auto-vpa`](policies/best-practices/auto-vpa.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.18+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
 | [`enforce-flux-best-practices`](policies/flux/enforce-flux-best-practices.yaml) | Validates reliability settings on Flux Kustomizations and HelmReleases | Kyverno 1.18+ and the Flux Kustomization v1 and HelmRelease v2 CRDs |
+| [`helm-release-enable-tests`](policies/flux/helm-release-enable-tests.yaml) | Enables Helm test actions for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
 
 ## Render the catalog
 
@@ -92,3 +93,30 @@ validated rollout to `Enforce`; the deprecated policy-level `validationFailureAc
 The fixtures prove both valid and invalid resources, including that a `flux-system/flux-system`
 Kustomization is not silently exempted by the reusable policy. They also prove that legacy HelmRelease
 beta objects and a nonmatching Flux source remain untouched.
+
+## Helm test opt-in behavior
+
+`helm-release-enable-tests` sets `spec.test.enable: true` on a Flux HelmRelease v2 only when the resource
+has this label:
+
+```yaml
+metadata:
+  labels:
+    helm.toolkit.fluxcd.io/helm-test: enabled
+```
+
+Unlabelled resources, other label values, legacy HelmRelease beta objects, and non-HelmRelease resources
+remain unchanged. The strategic-merge patch deliberately overrides an authored `enable: false` for an
+opted-in resource while preserving sibling test settings such as `timeout`, `ignoreFailures`, and
+`filters`.
+
+This is an admission mutation, not a mutate-existing rule. A HelmRelease that already exists when a
+consumer adopts the policy must pass through a subsequent create or update admission request before the
+mutation applies. Kyverno's global admission filters still win, so a filtered HelmRelease remains
+unreachable by this policy. Enabling Helm tests makes test failures participate in the Helm action's
+remediation by default; consumers can retain `spec.test.ignoreFailures: true` when a failure should not
+affect readiness. The shared policy contains no environment-specific exclusions.
+
+Consumers replacing a local policy with the same name should pin an immutable catalog revision, remove
+the local definition without overlapping ownership, validate every affected overlay, and reapply opted-in
+HelmReleases when immediate activation is required.

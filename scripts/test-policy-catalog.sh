@@ -5,6 +5,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 policy="${repo_root}/policies/best-practices/auto-vpa.yaml"
 flux_policy="${repo_root}/policies/flux/enforce-flux-best-practices.yaml"
+helm_test_policy="${repo_root}/policies/flux/helm-release-enable-tests.yaml"
 
 if [[ ! -f "${policy}" ]]; then
   echo "FAIL: shared catalog is missing policies/best-practices/auto-vpa.yaml" >&2
@@ -13,6 +14,110 @@ fi
 
 if [[ ! -f "${flux_policy}" ]]; then
   echo "FAIL: shared catalog is missing policies/flux/enforce-flux-best-practices.yaml" >&2
+  exit 1
+fi
+
+if [[ ! -f "${helm_test_policy}" ]]; then
+  echo "FAIL: shared catalog is missing policies/flux/helm-release-enable-tests.yaml" >&2
+  exit 1
+fi
+
+helm_test_rule_count="$(yq '.spec.rules | length' "${helm_test_policy}")"
+helm_test_required_rule_count="$(
+  yq '[.spec.rules[].name | select(. == "enable-helm-tests")] | length' "${helm_test_policy}"
+)"
+helm_test_background="$(yq '.spec.background' "${helm_test_policy}")"
+helm_test_rule_key_count="$(yq '.spec.rules[0] | keys | length' "${helm_test_policy}")"
+helm_test_match_branch_count="$(yq '.spec.rules[0].match.any | length' "${helm_test_policy}")"
+helm_test_resource_match_key_count="$(
+  yq '.spec.rules[0].match.any[0].resources | keys | length' "${helm_test_policy}"
+)"
+helm_test_kind_count="$(yq '.spec.rules[0].match.any[0].resources.kinds | length' "${helm_test_policy}")"
+helm_test_kind="$(yq '.spec.rules[0].match.any[0].resources.kinds[0]' "${helm_test_policy}")"
+helm_test_operation_count="$(
+  yq '.spec.rules[0].match.any[0].resources.operations | length' "${helm_test_policy}"
+)"
+helm_test_create_operation_count="$(
+  yq '[.spec.rules[0].match.any[0].resources.operations[] | select(. == "CREATE")] | length' \
+    "${helm_test_policy}"
+)"
+helm_test_update_operation_count="$(
+  yq '[.spec.rules[0].match.any[0].resources.operations[] | select(. == "UPDATE")] | length' \
+    "${helm_test_policy}"
+)"
+helm_test_selector_key_count="$(
+  yq '.spec.rules[0].match.any[0].resources.selector | keys | length' "${helm_test_policy}"
+)"
+helm_test_selector_label_count="$(
+  yq '.spec.rules[0].match.any[0].resources.selector.matchLabels | length' "${helm_test_policy}"
+)"
+helm_test_selector="$(
+  yq '.spec.rules[0].match.any[0].resources.selector.matchLabels."helm.toolkit.fluxcd.io/helm-test"' \
+    "${helm_test_policy}"
+)"
+helm_test_selector_expression_count="$(
+  yq '.spec.rules[0].match.any[0].resources.selector.matchExpressions // [] | length' \
+    "${helm_test_policy}"
+)"
+helm_test_mutate_key_count="$(yq '.spec.rules[0].mutate | keys | length' "${helm_test_policy}")"
+helm_test_patch_key_count="$(
+  yq '.spec.rules[0].mutate.patchStrategicMerge | keys | length' "${helm_test_policy}"
+)"
+helm_test_patch_spec_key_count="$(
+  yq '.spec.rules[0].mutate.patchStrategicMerge.spec | keys | length' "${helm_test_policy}"
+)"
+helm_test_patch_test_key_count="$(
+  yq '.spec.rules[0].mutate.patchStrategicMerge.spec.test | keys | length' "${helm_test_policy}"
+)"
+helm_test_enabled="$(yq '.spec.rules[0].mutate.patchStrategicMerge.spec.test.enable' "${helm_test_policy}")"
+helm_test_minversion="$(yq '.metadata.annotations."policies.kyverno.io/minversion"' "${helm_test_policy}")"
+helm_test_catalog_entry_count="$(
+  yq '[.resources[] | select(. == "policies/flux/helm-release-enable-tests.yaml")] | length' \
+    "${repo_root}/kustomization.yaml"
+)"
+
+if [[ "${helm_test_rule_count}" -ne 1 || "${helm_test_required_rule_count}" -ne 1 ]]; then
+  echo "FAIL: shared Helm test policy must expose only the enable-helm-tests rule" >&2
+  exit 1
+fi
+
+if [[ "${helm_test_background}" != "false" || "${helm_test_rule_key_count}" -ne 3 ]]; then
+  echo "FAIL: shared Helm test policy must contain only one admission-time rule" >&2
+  exit 1
+fi
+
+if [[ "${helm_test_match_branch_count}" -ne 1 || "${helm_test_resource_match_key_count}" -ne 3 ||
+  "${helm_test_kind_count}" -ne 1 || "${helm_test_kind}" != "helm.toolkit.fluxcd.io/v2/HelmRelease" ]]; then
+  echo "FAIL: shared Helm test policy must match only the served HelmRelease v2 API" >&2
+  exit 1
+fi
+
+if [[ "${helm_test_operation_count}" -ne 2 || "${helm_test_create_operation_count}" -ne 1 ||
+  "${helm_test_update_operation_count}" -ne 1 ]]; then
+  echo "FAIL: shared Helm test policy must mutate only create and update admissions" >&2
+  exit 1
+fi
+
+if [[ "${helm_test_selector_key_count}" -ne 1 || "${helm_test_selector_label_count}" -ne 1 ||
+  "${helm_test_selector_expression_count}" -ne 0 || "${helm_test_selector}" != "enabled" ]]; then
+  echo "FAIL: shared Helm test policy must use only the documented opt-in label" >&2
+  exit 1
+fi
+
+if [[ "${helm_test_mutate_key_count}" -ne 1 || "${helm_test_patch_key_count}" -ne 1 ||
+  "${helm_test_patch_spec_key_count}" -ne 1 || "${helm_test_patch_test_key_count}" -ne 1 ||
+  "${helm_test_enabled}" != "true" ]]; then
+  echo "FAIL: shared Helm test policy must mutate only spec.test.enable" >&2
+  exit 1
+fi
+
+if [[ "${helm_test_minversion}" != "1.18.0" ]]; then
+  echo "FAIL: shared Helm test policy must declare the catalog's Kyverno 1.18.0 floor" >&2
+  exit 1
+fi
+
+if [[ "${helm_test_catalog_entry_count}" -ne 1 ]]; then
+  echo "FAIL: shared Helm test policy must be registered exactly once in the root catalog" >&2
   exit 1
 fi
 
@@ -94,6 +199,11 @@ kyverno test "${repo_root}/tests/auto-vpa" \
   --remove-color
 
 kyverno test "${repo_root}/tests/enforce-flux-best-practices" \
+  --require-tests \
+  --detailed-results \
+  --remove-color
+
+kyverno test "${repo_root}/tests/helm-release-enable-tests" \
   --require-tests \
   --detailed-results \
   --remove-color

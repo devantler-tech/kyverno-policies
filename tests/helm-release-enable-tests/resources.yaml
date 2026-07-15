@@ -1,0 +1,78 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: opted-in-without-test-settings
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/helm-test: enabled
+spec:
+  interval: 30m
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: opted-in-with-existing-test-settings
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/helm-test: enabled
+spec:
+  interval: 30m
+  test:
+    enable: false
+    timeout: 3m
+    ignoreFailures: true
+    filters:
+      - name: migration
+        exclude: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: already-enabled
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/helm-test: enabled
+spec:
+  interval: 30m
+  test:
+    enable: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: unlabelled
+  namespace: apps
+spec:
+  interval: 30m
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: explicitly-disabled
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/helm-test: disabled
+spec:
+  interval: 30m
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta2
+kind: HelmRelease
+metadata:
+  name: legacy-labelled
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/helm-test: enabled
+spec:
+  interval: 30m
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: labelled-source
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/helm-test: enabled
+spec:
+  interval: 30m
+  url: https://example.com/catalog.git
