@@ -10,7 +10,8 @@ metadata:
     policies.kyverno.io/subject: Deployment, StatefulSet, DaemonSet
     policies.kyverno.io/minversion: 1.18.0
     policies.kyverno.io/description: >-
-      Generates a request-bounded VerticalPodAutoscaler for each Deployment,
+      Generates a recommendation-bounded VerticalPodAutoscaler for each
+      Deployment,
       StatefulSet, and DaemonSet processed by Kyverno. Deployments and
       StatefulSets manage CPU and memory; DaemonSets manage CPU only so one
       busy node cannot inflate memory requests across every node.

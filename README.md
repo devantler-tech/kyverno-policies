@@ -11,7 +11,7 @@ change.
 
 | Policy | Behavior | Prerequisites |
 |---|---|---|
-| [`auto-vpa`](policies/best-practices/auto-vpa.yaml) | Generates request-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.18+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
+| [`auto-vpa`](policies/best-practices/auto-vpa.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.18+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
 
 ## Render the catalog
 
@@ -37,9 +37,10 @@ Important operating constraints:
 
 - Kyverno's global resource filters still win. A namespace or kind filtered by the Kyverno installation
   will not receive a generated VPA even though the policy itself matches it.
-- VPA 1.5+ enables `InPlaceOrRecreate` by default. Actual in-place updates require Kubernetes 1.33+ with
-  `InPlacePodVerticalScaling`; otherwise VPA can fall back to pod recreation. This policy does not override
-  the updater's global minimum-replica guard, and PodDisruptionBudgets still govern disruptive updates.
+- VPA 1.5+ enables `InPlaceOrRecreate` by default. In-place operation requires Kubernetes 1.33+ with
+  `InPlacePodVerticalScaling`; even on a compatible cluster, an infeasible resize can fall back to pod
+  recreation. This policy does not override the updater's global minimum-replica guard, and
+  PodDisruptionBudgets still govern disruptive updates.
 - `RequestsAndLimits` preserves the authored limit-to-request ratio. `minAllowed` and `maxAllowed` bound
   recommendations and requests, not the proportional limits; workloads need sensible starting ratios and
   a `LimitRange` or admission policy when hard limit ceilings are required.
@@ -49,7 +50,7 @@ Important operating constraints:
 - Horizontal autoscaling on CPU or memory conflicts when VPA controls that same resource metric. Exclude
   or adapt those workloads in the consuming repository; custom or external HPA metrics are compatible.
 - Consumers must inventory existing VPAs and exclude their targets before adoption. Multiple VPAs matching
-  one pod have undefined behavior, and a same-name generated VPA can synchronize over a hand-tuned object.
+  one pod have undefined behavior.
 - Exclude workloads that define pod-level `resources`; upstream VPA does not yet support them and its
   container-level recommendation can prevent replacement pods from being admitted.
 - The parity version retains workload-name-only VPA names. Same-name workloads of different kinds are a
