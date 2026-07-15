@@ -43,3 +43,4 @@ jobs:
           shellcheck scripts/test-policy-catalog.sh
           actionlint .github/workflows/ci.yaml
           zizmor .github/workflows/ci.yaml
+          git diff --check
