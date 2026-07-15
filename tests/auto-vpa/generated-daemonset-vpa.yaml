@@ -1,0 +1,24 @@
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: node-agent
+  namespace: test
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: DaemonSet
+    name: node-agent
+  updatePolicy:
+    updateMode: InPlaceOrRecreate
+    minReplicas: 1
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        controlledResources:
+          - cpu
+        controlledValues: RequestsAndLimits
+        minAllowed:
+          cpu: 50m
+        maxAllowed:
+          cpu: "1"

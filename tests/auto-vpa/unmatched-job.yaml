@@ -1,0 +1,13 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch
+  namespace: test
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: batch
+          image: registry.k8s.io/pause:3.10

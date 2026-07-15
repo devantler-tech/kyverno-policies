@@ -1,0 +1,126 @@
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: auto-vpa
+  annotations:
+    policies.kyverno.io/title: Auto VPA
+    policies.kyverno.io/category: Autoscaling
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: Deployment, StatefulSet, DaemonSet
+    policies.kyverno.io/minversion: 1.18.0
+    policies.kyverno.io/description: >-
+      Generates a bounded VerticalPodAutoscaler for each Deployment,
+      StatefulSet, and DaemonSet processed by Kyverno. Deployments and
+      StatefulSets manage CPU and memory; DaemonSets manage CPU only so one
+      busy node cannot inflate memory requests across every node.
+spec:
+  rules:
+    - name: generate-vpa-for-deployment
+      match:
+        any:
+          - resources:
+              kinds:
+                - apps/v1/Deployment
+      generate:
+        apiVersion: autoscaling.k8s.io/v1
+        kind: VerticalPodAutoscaler
+        name: "{{ request.object.metadata.name }}"
+        namespace: "{{ request.object.metadata.namespace }}"
+        synchronize: true
+        generateExisting: true
+        data:
+          spec:
+            targetRef:
+              apiVersion: apps/v1
+              kind: Deployment
+              name: "{{ request.object.metadata.name }}"
+            updatePolicy:
+              updateMode: InPlaceOrRecreate
+              minReplicas: 1
+            resourcePolicy:
+              containerPolicies:
+                - containerName: "*"
+                  controlledResources:
+                    - cpu
+                    - memory
+                  controlledValues: RequestsAndLimits
+                  minAllowed:
+                    # Preserve enough CPU limit headroom for cold starts when
+                    # RequestsAndLimits scales an authored limit:request ratio.
+                    cpu: 50m
+                    memory: 64Mi
+                  maxAllowed:
+                    cpu: "3"
+                    memory: 6Gi
+    - name: generate-vpa-for-statefulset
+      match:
+        any:
+          - resources:
+              kinds:
+                - apps/v1/StatefulSet
+      generate:
+        apiVersion: autoscaling.k8s.io/v1
+        kind: VerticalPodAutoscaler
+        name: "{{ request.object.metadata.name }}"
+        namespace: "{{ request.object.metadata.namespace }}"
+        synchronize: true
+        generateExisting: true
+        data:
+          spec:
+            targetRef:
+              apiVersion: apps/v1
+              kind: StatefulSet
+              name: "{{ request.object.metadata.name }}"
+            updatePolicy:
+              # Apply recommendations on natural restarts without evicting a
+              # running stateful workload backed by single-writer storage.
+              updateMode: Initial
+            resourcePolicy:
+              containerPolicies:
+                - containerName: "*"
+                  controlledResources:
+                    - cpu
+                    - memory
+                  controlledValues: RequestsAndLimits
+                  minAllowed:
+                    cpu: 50m
+                    memory: 64Mi
+                  maxAllowed:
+                    cpu: "3"
+                    memory: 6Gi
+    - name: generate-vpa-for-daemonset
+      match:
+        any:
+          - resources:
+              kinds:
+                - apps/v1/DaemonSet
+      generate:
+        apiVersion: autoscaling.k8s.io/v1
+        kind: VerticalPodAutoscaler
+        name: "{{ request.object.metadata.name }}"
+        namespace: "{{ request.object.metadata.namespace }}"
+        synchronize: true
+        generateExisting: true
+        data:
+          spec:
+            targetRef:
+              apiVersion: apps/v1
+              kind: DaemonSet
+              name: "{{ request.object.metadata.name }}"
+            updatePolicy:
+              updateMode: InPlaceOrRecreate
+              minReplicas: 1
+            resourcePolicy:
+              containerPolicies:
+                - containerName: "*"
+                  # VPA aggregates all DaemonSet replicas into one histogram;
+                  # controlling memory would size every node for the busiest
+                  # node's peak and can prevent cluster scale-down.
+                  controlledResources:
+                    - cpu
+                  controlledValues: RequestsAndLimits
+                  minAllowed:
+                    cpu: 50m
+                  maxAllowed:
+                    cpu: "1"
