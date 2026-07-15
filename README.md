@@ -12,6 +12,7 @@ change.
 | Policy | Behavior | Prerequisites |
 |---|---|---|
 | [`auto-vpa`](policies/best-practices/auto-vpa.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.18+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
+| [`enforce-flux-best-practices`](policies/flux/enforce-flux-best-practices.yaml) | Validates reliability settings on Flux Kustomizations and HelmReleases | Kyverno 1.18+ and the Flux Kustomization v1 and HelmRelease v2 CRDs |
 
 ## Render the catalog
 
@@ -73,3 +74,21 @@ git diff --check
 The generated-resource fixtures assert the exact VPA target, update mode, controlled resources, and
 bounds for each workload kind. An unmatched Job assertion verifies the policy does not generate outside
 its documented scope.
+
+## Flux best-practices behavior
+
+`enforce-flux-best-practices` applies an opinionated reliability baseline that requires every matching
+resource to declare its reconciliation and remediation controls explicitly:
+
+- Kustomizations set non-empty `interval`, `timeout`, and `retryInterval` values, enable `prune` and
+  `wait`, and name their source reference.
+- HelmReleases set non-empty `interval` and `timeout` values. Install and upgrade each either use at
+  least one remediation retry (`-1` for unlimited retries) or explicitly select Flux's
+  `RetryOnFailure` strategy; upgrade remediation also enables `remediateLastFailure`.
+
+The shared policy deliberately has no environment-specific exclusions. Each validation rule uses the
+current per-rule `failureAction: Audit` field, so consumers own both their exclusions and the separately
+validated rollout to `Enforce`; the deprecated policy-level `validationFailureAction` field is not used.
+The fixtures prove both valid and invalid resources, including that a `flux-system/flux-system`
+Kustomization is not silently exempted by the reusable policy. They also prove that legacy HelmRelease
+beta objects and a nonmatching Flux source remain untouched.
