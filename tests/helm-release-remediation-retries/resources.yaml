@@ -89,6 +89,22 @@ spec:
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
+  name: explicit-zero-with-flux-default
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/remediation: enabled
+spec:
+  interval: 30m
+  install:
+    remediation:
+      retries: 0
+  upgrade:
+    remediation:
+      retries: 0
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
   name: explicit-unlimited-false-and-upgrade-strategy
   namespace: apps
   labels:

@@ -22,6 +22,7 @@ results:
     resources:
       - apps/install-retry-on-failure
       - apps/explicit-zero-false
+      - apps/explicit-zero-with-flux-default
       - apps/explicit-unlimited-false-and-upgrade-strategy
       - apps/both-sides-configured
       - apps/both-retry-on-failure
@@ -51,6 +52,7 @@ results:
     resources:
       - apps/upgrade-retry-on-failure
       - apps/explicit-zero-false
+      - apps/explicit-zero-with-flux-default
       - apps/both-sides-configured
       - apps/both-retry-on-failure
       - apps/unlabelled

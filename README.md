@@ -170,6 +170,10 @@ retry counts, and authored `-1` values, remain authoritative because the policy 
 leaves. Install and upgrade settings are handled independently, and their other action, strategy, and
 remediation fields are preserved.
 
+An action with an explicit `retries: 0` is also left entirely unchanged. This preserves Flux's default
+`remediateLastFailure: false` when the author omits that boolean, avoiding an unexpected uninstall or
+rollback after the first failed action.
+
 An action whose `strategy.name` is explicitly `RetryOnFailure` is left entirely unchanged because that
 strategy has its own retry behavior and does not use the remediation block in the same way.
 `RemediateOnFailure`, a missing strategy, and future strategy values continue through the normal

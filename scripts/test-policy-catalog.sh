@@ -283,7 +283,8 @@ assert_equal "$(yq '[.resources[] |
 
 for side in install upgrade; do
   rule_name="default-${side}-remediation"
-  expected_precondition="{{ request.object.spec.${side}.strategy.name || '' }}"
+  expected_strategy_precondition="{{ request.object.spec.${side}.strategy.name || '' }}"
+  expected_retries_precondition="{{ request.object.spec.${side}.remediation.retries || '' }}"
 
   assert_equal "$(RULE_NAME="${rule_name}" yq \
     '.spec.rules | map(select(.name == env(RULE_NAME))) | length' \
@@ -335,8 +336,8 @@ for side in install upgrade; do
   assert_equal "$(RULE_NAME="${rule_name}" yq \
     '.spec.rules[] | select(.name == env(RULE_NAME)) |
       .preconditions.all | length' \
-    "${helm_remediation_policy}")" "1" \
-    "shared Helm ${side} remediation must use one missing-safe condition"
+    "${helm_remediation_policy}")" "2" \
+    "shared Helm ${side} remediation must use two missing-safe conditions"
   assert_equal "$(RULE_NAME="${rule_name}" yq \
     '.spec.rules[] | select(.name == env(RULE_NAME)) |
       .preconditions.all[0] | keys | sort | join(",")' \
@@ -344,16 +345,33 @@ for side in install upgrade; do
     "shared Helm ${side} remediation condition must contain only key, operator, and value"
   assert_equal "$(RULE_NAME="${rule_name}" yq \
     '.spec.rules[] | select(.name == env(RULE_NAME)) | .preconditions.all[0].key' \
-    "${helm_remediation_policy}")" "${expected_precondition}" \
+    "${helm_remediation_policy}")" "${expected_strategy_precondition}" \
     "shared Helm ${side} remediation must safely read a missing strategy"
   assert_equal "$(RULE_NAME="${rule_name}" yq \
     '.spec.rules[] | select(.name == env(RULE_NAME)) | .preconditions.all[0].operator' \
     "${helm_remediation_policy}")" "NotEquals" \
-    "shared Helm ${side} remediation must skip only RetryOnFailure"
+    "shared Helm ${side} remediation strategy guard must use NotEquals"
   assert_equal "$(RULE_NAME="${rule_name}" yq \
     '.spec.rules[] | select(.name == env(RULE_NAME)) | .preconditions.all[0].value' \
     "${helm_remediation_policy}")" "RetryOnFailure" \
-    "shared Helm ${side} remediation must skip only RetryOnFailure"
+    "shared Helm ${side} remediation strategy guard must skip RetryOnFailure"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .preconditions.all[1] | keys | sort | join(",")' \
+    "${helm_remediation_policy}")" "key,operator,value" \
+    "shared Helm ${side} zero-retry condition must contain only key, operator, and value"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) | .preconditions.all[1].key' \
+    "${helm_remediation_policy}")" "${expected_retries_precondition}" \
+    "shared Helm ${side} remediation must safely read a missing retry count"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) | .preconditions.all[1].operator' \
+    "${helm_remediation_policy}")" "NotEquals" \
+    "shared Helm ${side} remediation must preserve an explicit zero-retry default"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) | .preconditions.all[1].value' \
+    "${helm_remediation_policy}")" "0" \
+    "shared Helm ${side} remediation must preserve an explicit zero-retry default"
   assert_equal "$(RULE_NAME="${rule_name}" yq \
     '.spec.rules[] | select(.name == env(RULE_NAME)) | .mutate | keys | join(",")' \
     "${helm_remediation_policy}")" "patchStrategicMerge" \
