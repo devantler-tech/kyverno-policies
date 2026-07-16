@@ -1,0 +1,33 @@
+---
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: helm-release-enable-tests-is-explicitly-opt-in
+policies:
+  - ../../policies/flux/helm-release-enable-tests.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: helm-release-enable-tests
+    rule: enable-helm-tests
+    resources:
+      - apps/opted-in-without-test-settings
+      - apps/opted-in-with-existing-test-settings
+    patchedResources: patched-resources.yaml
+    kind: HelmRelease
+    result: pass
+  - policy: helm-release-enable-tests
+    rule: enable-helm-tests
+    resources:
+      - apps/unlabelled
+      - apps/explicitly-disabled
+      - apps/legacy-labelled
+      - apps/already-enabled
+    kind: HelmRelease
+    result: skip
+  - policy: helm-release-enable-tests
+    rule: enable-helm-tests
+    resources:
+      - apps/labelled-source
+    kind: GitRepository
+    result: skip
