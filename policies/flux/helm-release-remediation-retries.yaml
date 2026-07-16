@@ -1,0 +1,72 @@
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: helm-release-remediation-retries
+  annotations:
+    policies.kyverno.io/title: Helm Release Remediation Retries
+    policies.kyverno.io/category: Flux
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: HelmRelease
+    policies.kyverno.io/minversion: 1.18.0
+    policies.kyverno.io/description: >-
+      Defaults install and upgrade remediation to unlimited retries and
+      preconfigures last-failure remediation for Flux HelmRelease v2 resources
+      which opt in with the helm.toolkit.fluxcd.io/remediation: enabled label.
+spec:
+  background: false
+  rules:
+    - name: default-install-remediation
+      match:
+        any:
+          - resources:
+              kinds:
+                - helm.toolkit.fluxcd.io/v2/HelmRelease
+              operations:
+                - CREATE
+                - UPDATE
+              selector:
+                matchLabels:
+                  helm.toolkit.fluxcd.io/remediation: enabled
+      preconditions:
+        all:
+          - key: "{{ request.object.spec.install.strategy.name || '' }}"
+            operator: NotEquals
+            value: RetryOnFailure
+          - key: "{{ request.object.spec.install.remediation.retries || '' }}"
+            operator: NotEquals
+            value: 0
+      mutate:
+        patchStrategicMerge:
+          spec:
+            install:
+              remediation:
+                +(retries): -1
+                +(remediateLastFailure): true
+    - name: default-upgrade-remediation
+      match:
+        any:
+          - resources:
+              kinds:
+                - helm.toolkit.fluxcd.io/v2/HelmRelease
+              operations:
+                - CREATE
+                - UPDATE
+              selector:
+                matchLabels:
+                  helm.toolkit.fluxcd.io/remediation: enabled
+      preconditions:
+        all:
+          - key: "{{ request.object.spec.upgrade.strategy.name || '' }}"
+            operator: NotEquals
+            value: RetryOnFailure
+          - key: "{{ request.object.spec.upgrade.remediation.retries || '' }}"
+            operator: NotEquals
+            value: 0
+      mutate:
+        patchStrategicMerge:
+          spec:
+            upgrade:
+              remediation:
+                +(retries): -1
+                +(remediateLastFailure): true

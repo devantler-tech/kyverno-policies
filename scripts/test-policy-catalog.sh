@@ -7,6 +7,18 @@ policy="${repo_root}/policies/best-practices/auto-vpa.yaml"
 flux_policy="${repo_root}/policies/flux/enforce-flux-best-practices.yaml"
 helm_crds_policy="${repo_root}/policies/flux/helm-release-install-crds.yaml"
 helm_test_policy="${repo_root}/policies/flux/helm-release-enable-tests.yaml"
+helm_remediation_policy="${repo_root}/policies/flux/helm-release-remediation-retries.yaml"
+
+assert_equal() {
+  local actual="$1"
+  local expected="$2"
+  local message="$3"
+
+  if [[ "${actual}" != "${expected}" ]]; then
+    echo "FAIL: ${message} (expected ${expected}, got ${actual})" >&2
+    exit 1
+  fi
+}
 
 if [[ ! -f "${policy}" ]]; then
   echo "FAIL: shared catalog is missing policies/best-practices/auto-vpa.yaml" >&2
@@ -241,6 +253,161 @@ if [[ "${helm_test_catalog_entry_count}" -ne 1 ]]; then
   exit 1
 fi
 
+if [[ ! -f "${helm_remediation_policy}" ]]; then
+  echo "FAIL: shared catalog is missing policies/flux/helm-release-remediation-retries.yaml" >&2
+  exit 1
+fi
+
+assert_equal "$(yq '.apiVersion' "${helm_remediation_policy}")" "kyverno.io/v1" \
+  "shared Helm remediation policy must use kyverno.io/v1"
+assert_equal "$(yq '.kind' "${helm_remediation_policy}")" "ClusterPolicy" \
+  "shared Helm remediation policy must use ClusterPolicy"
+assert_equal "$(yq '.metadata.name' "${helm_remediation_policy}")" \
+  "helm-release-remediation-retries" \
+  "shared Helm remediation policy must use its catalog identity"
+assert_equal "$(yq '.metadata.annotations."policies.kyverno.io/minversion"' \
+  "${helm_remediation_policy}")" "1.18.0" \
+  "shared Helm remediation policy must declare the catalog Kyverno floor"
+assert_equal "$(yq '.spec.background' "${helm_remediation_policy}")" "false" \
+  "shared Helm remediation policy must be admission-only"
+assert_equal "$(yq '.spec.rules | length' "${helm_remediation_policy}")" "2" \
+  "shared Helm remediation policy must expose two independent rules"
+assert_equal "$(yq '[.. | select(tag == "!!map") |
+  select(has("targets") or has("mutateExisting") or has("mutateExistingOnPolicyUpdate"))
+] | length' "${helm_remediation_policy}")" "0" \
+  "shared Helm remediation policy must not mutate existing or targeted resources"
+assert_equal "$(yq '[.resources[] |
+  select(. == "policies/flux/helm-release-remediation-retries.yaml")
+] | length' "${repo_root}/kustomization.yaml")" "1" \
+  "shared Helm remediation policy must be registered exactly once"
+
+for side in install upgrade; do
+  rule_name="default-${side}-remediation"
+  expected_strategy_precondition="{{ request.object.spec.${side}.strategy.name || '' }}"
+  expected_retries_precondition="{{ request.object.spec.${side}.remediation.retries || '' }}"
+
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules | map(select(.name == env(RULE_NAME))) | length' \
+    "${helm_remediation_policy}")" "1" \
+    "shared Helm remediation policy must define the ${side} rule exactly once"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) | keys | sort | join(",")' \
+    "${helm_remediation_policy}")" "match,mutate,name,preconditions" \
+    "shared Helm ${side} remediation rule must contain only its rule contract"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) | .match.any | length' \
+    "${helm_remediation_policy}")" "1" \
+    "shared Helm ${side} remediation must have one match branch"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .match.any[0].resources | keys | sort | join(",")' \
+    "${helm_remediation_policy}")" "kinds,operations,selector" \
+    "shared Helm ${side} remediation must contain only the admission match contract"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .match.any[0].resources.kinds | join(",")' \
+    "${helm_remediation_policy}")" "helm.toolkit.fluxcd.io/v2/HelmRelease" \
+    "shared Helm ${side} remediation must match only HelmRelease v2"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .match.any[0].resources.operations | sort | join(",")' \
+    "${helm_remediation_policy}")" "CREATE,UPDATE" \
+    "shared Helm ${side} remediation must match create and update admissions"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .match.any[0].resources.selector | keys | join(",")' \
+    "${helm_remediation_policy}")" "matchLabels" \
+    "shared Helm ${side} remediation must use only a label selector"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .match.any[0].resources.selector.matchLabels | keys | join(",")' \
+    "${helm_remediation_policy}")" "helm.toolkit.fluxcd.io/remediation" \
+    "shared Helm ${side} remediation must use only the documented opt-in label"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .match.any[0].resources.selector.matchLabels."helm.toolkit.fluxcd.io/remediation"' \
+    "${helm_remediation_policy}")" "enabled" \
+    "shared Helm ${side} remediation must require explicit opt-in"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .preconditions | keys | join(",")' \
+    "${helm_remediation_policy}")" "all" \
+    "shared Helm ${side} remediation must use one precondition group"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .preconditions.all | length' \
+    "${helm_remediation_policy}")" "2" \
+    "shared Helm ${side} remediation must use two missing-safe conditions"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .preconditions.all[0] | keys | sort | join(",")' \
+    "${helm_remediation_policy}")" "key,operator,value" \
+    "shared Helm ${side} remediation condition must contain only key, operator, and value"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) | .preconditions.all[0].key' \
+    "${helm_remediation_policy}")" "${expected_strategy_precondition}" \
+    "shared Helm ${side} remediation must safely read a missing strategy"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) | .preconditions.all[0].operator' \
+    "${helm_remediation_policy}")" "NotEquals" \
+    "shared Helm ${side} remediation strategy guard must use NotEquals"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) | .preconditions.all[0].value' \
+    "${helm_remediation_policy}")" "RetryOnFailure" \
+    "shared Helm ${side} remediation strategy guard must skip RetryOnFailure"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .preconditions.all[1] | keys | sort | join(",")' \
+    "${helm_remediation_policy}")" "key,operator,value" \
+    "shared Helm ${side} zero-retry condition must contain only key, operator, and value"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) | .preconditions.all[1].key' \
+    "${helm_remediation_policy}")" "${expected_retries_precondition}" \
+    "shared Helm ${side} remediation must safely read a missing retry count"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) | .preconditions.all[1].operator' \
+    "${helm_remediation_policy}")" "NotEquals" \
+    "shared Helm ${side} remediation must preserve an explicit zero-retry default"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) | .preconditions.all[1].value' \
+    "${helm_remediation_policy}")" "0" \
+    "shared Helm ${side} remediation must preserve an explicit zero-retry default"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) | .mutate | keys | join(",")' \
+    "${helm_remediation_policy}")" "patchStrategicMerge" \
+    "shared Helm ${side} remediation must use only strategic merge"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .mutate.patchStrategicMerge | keys | join(",")' \
+    "${helm_remediation_policy}")" "spec" \
+    "shared Helm ${side} remediation patch must touch only spec"
+  assert_equal "$(RULE_NAME="${rule_name}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .mutate.patchStrategicMerge.spec | keys | join(",")' \
+    "${helm_remediation_policy}")" "${side}" \
+    "shared Helm ${side} remediation patch must touch only its action"
+  assert_equal "$(RULE_NAME="${rule_name}" SIDE="${side}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .mutate.patchStrategicMerge.spec[env(SIDE)] | keys | join(",")' \
+    "${helm_remediation_policy}")" "remediation" \
+    "shared Helm ${side} remediation patch must preserve action siblings"
+  assert_equal "$(RULE_NAME="${rule_name}" SIDE="${side}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .mutate.patchStrategicMerge.spec[env(SIDE)].remediation | keys | sort | join(",")' \
+    "${helm_remediation_policy}")" "+(remediateLastFailure),+(retries)" \
+    "shared Helm ${side} remediation must add only missing scalar leaves"
+  assert_equal "$(RULE_NAME="${rule_name}" SIDE="${side}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .mutate.patchStrategicMerge.spec[env(SIDE)].remediation."+(retries)"' \
+    "${helm_remediation_policy}")" "-1" \
+    "shared Helm ${side} remediation must default to unlimited retries"
+  assert_equal "$(RULE_NAME="${rule_name}" SIDE="${side}" yq \
+    '.spec.rules[] | select(.name == env(RULE_NAME)) |
+      .mutate.patchStrategicMerge.spec[env(SIDE)].remediation."+(remediateLastFailure)"' \
+    "${helm_remediation_policy}")" "true" \
+    "shared Helm ${side} remediation must default last-failure remediation"
+done
+
 flux_rule_count="$(yq '.spec.rules | length' "${flux_policy}")"
 flux_audit_rule_count="$(
   yq '[.spec.rules[].validate | select(.failureAction == "Audit")] | length' "${flux_policy}"
@@ -329,6 +496,11 @@ kyverno test "${repo_root}/tests/helm-release-enable-tests" \
   --remove-color
 
 kyverno test "${repo_root}/tests/helm-release-install-crds" \
+  --require-tests \
+  --detailed-results \
+  --remove-color
+
+kyverno test "${repo_root}/tests/helm-release-remediation-retries" \
   --require-tests \
   --detailed-results \
   --remove-color

@@ -1,0 +1,68 @@
+---
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: helm-release-remediation-retries-are-safe-defaults
+policies:
+  - ../../policies/flux/helm-release-remediation-retries.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: helm-release-remediation-retries
+    rule: default-install-remediation
+    resources:
+      - apps/missing-defaults
+      - apps/remediate-on-failure-with-siblings
+      - apps/upgrade-retry-on-failure
+    patchedResources: install-patched-resources.yaml
+    kind: HelmRelease
+    result: pass
+  - policy: helm-release-remediation-retries
+    rule: default-install-remediation
+    resources:
+      - apps/install-retry-on-failure
+      - apps/explicit-zero-false
+      - apps/explicit-zero-with-flux-default
+      - apps/explicit-unlimited-false-and-upgrade-strategy
+      - apps/both-sides-configured
+      - apps/both-retry-on-failure
+      - apps/unlabelled
+      - apps/explicitly-disabled
+      - apps/legacy-labelled
+    kind: HelmRelease
+    result: skip
+  - policy: helm-release-remediation-retries
+    rule: default-install-remediation
+    resources:
+      - apps/labelled-source
+    kind: GitRepository
+    result: skip
+  - policy: helm-release-remediation-retries
+    rule: default-upgrade-remediation
+    resources:
+      - apps/missing-defaults
+      - apps/remediate-on-failure-with-siblings
+      - apps/install-retry-on-failure
+      - apps/explicit-unlimited-false-and-upgrade-strategy
+    patchedResources: upgrade-patched-resources.yaml
+    kind: HelmRelease
+    result: pass
+  - policy: helm-release-remediation-retries
+    rule: default-upgrade-remediation
+    resources:
+      - apps/upgrade-retry-on-failure
+      - apps/explicit-zero-false
+      - apps/explicit-zero-with-flux-default
+      - apps/both-sides-configured
+      - apps/both-retry-on-failure
+      - apps/unlabelled
+      - apps/explicitly-disabled
+      - apps/legacy-labelled
+    kind: HelmRelease
+    result: skip
+  - policy: helm-release-remediation-retries
+    rule: default-upgrade-remediation
+    resources:
+      - apps/labelled-source
+    kind: GitRepository
+    result: skip

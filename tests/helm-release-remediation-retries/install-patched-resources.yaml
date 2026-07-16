@@ -1,0 +1,68 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: missing-defaults
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/remediation: enabled
+spec:
+  interval: 30m
+  install:
+    remediation:
+      retries: -1
+      remediateLastFailure: true
+  upgrade:
+    remediation:
+      retries: -1
+      remediateLastFailure: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: remediate-on-failure-with-siblings
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/remediation: enabled
+spec:
+  interval: 30m
+  install:
+    strategy:
+      name: RemediateOnFailure
+    timeout: 10m
+    crds: CreateReplace
+    disableWait: true
+    remediation:
+      ignoreTestFailures: true
+      retries: -1
+      remediateLastFailure: true
+  upgrade:
+    strategy:
+      name: RemediateOnFailure
+    timeout: 15m
+    crds: CreateReplace
+    cleanupOnFail: true
+    remediation:
+      ignoreTestFailures: false
+      strategy: rollback
+      retries: -1
+      remediateLastFailure: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: upgrade-retry-on-failure
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/remediation: enabled
+spec:
+  interval: 30m
+  install:
+    disableWait: true
+    remediation:
+      retries: -1
+      remediateLastFailure: true
+  upgrade:
+    strategy:
+      name: RetryOnFailure
+      retryInterval: 5m
