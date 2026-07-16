@@ -1,0 +1,29 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: opted-in-without-test-settings
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/helm-test: enabled
+spec:
+  interval: 30m
+  test:
+    enable: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: opted-in-with-existing-test-settings
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/helm-test: enabled
+spec:
+  interval: 30m
+  test:
+    enable: true
+    timeout: 3m
+    ignoreFailures: true
+    filters:
+      - name: migration
+        exclude: true
