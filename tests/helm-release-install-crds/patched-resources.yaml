@@ -1,0 +1,33 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: opted-in-without-crd-settings
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/crds: enabled
+spec:
+  interval: 30m
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: opted-in-with-existing-settings
+  namespace: apps
+  labels:
+    helm.toolkit.fluxcd.io/crds: enabled
+spec:
+  interval: 30m
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 2
+      remediateLastFailure: true

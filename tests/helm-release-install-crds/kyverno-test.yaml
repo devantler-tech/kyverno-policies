@@ -1,0 +1,33 @@
+---
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: helm-release-install-crds-is-explicitly-opt-in
+policies:
+  - ../../policies/flux/helm-release-install-crds.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: helm-release-install-crds
+    rule: set-helm-release-install-crds
+    resources:
+      - apps/opted-in-without-crd-settings
+      - apps/opted-in-with-existing-settings
+    patchedResources: patched-resources.yaml
+    kind: HelmRelease
+    result: pass
+  - policy: helm-release-install-crds
+    rule: set-helm-release-install-crds
+    resources:
+      - apps/unlabelled
+      - apps/explicitly-disabled
+      - apps/legacy-labelled
+      - apps/already-configured
+    kind: HelmRelease
+    result: skip
+  - policy: helm-release-install-crds
+    rule: set-helm-release-install-crds
+    resources:
+      - apps/labelled-source
+    kind: GitRepository
+    result: skip

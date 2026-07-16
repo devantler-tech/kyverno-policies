@@ -14,6 +14,7 @@ change.
 | [`auto-vpa`](policies/best-practices/auto-vpa.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.18+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
 | [`enforce-flux-best-practices`](policies/flux/enforce-flux-best-practices.yaml) | Validates reliability settings on Flux Kustomizations and HelmReleases | Kyverno 1.18+ and the Flux Kustomization v1 and HelmRelease v2 CRDs |
 | [`helm-release-enable-tests`](policies/flux/helm-release-enable-tests.yaml) | Enables Helm test actions for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
+| [`helm-release-install-crds`](policies/flux/helm-release-install-crds.yaml) | Creates and replaces chart CRDs for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
 
 ## Render the catalog
 
@@ -121,3 +122,31 @@ respective actions. The shared policy contains no environment-specific exclusion
 Consumers replacing a local policy with the same name should pin an immutable catalog revision, remove
 the local definition without overlapping ownership, validate every affected overlay, and reapply opted-in
 HelmReleases when immediate activation is required.
+
+## Helm CRD lifecycle opt-in behavior
+
+`helm-release-install-crds` sets both `spec.install.crds` and `spec.upgrade.crds` to `CreateReplace` on a
+Flux HelmRelease v2 only when the resource has this label:
+
+```yaml
+metadata:
+  labels:
+    helm.toolkit.fluxcd.io/crds: enabled
+```
+
+Unlabelled resources, other label values, legacy HelmRelease beta objects, and non-HelmRelease resources
+remain unchanged. The strategic-merge patch deliberately overrides existing CRD strategies for an
+opted-in resource while preserving sibling install and upgrade settings such as remediation retries.
+
+This is an admission mutation, not a mutate-existing rule. A HelmRelease that already exists when a
+consumer adopts the policy must pass through a subsequent create or update admission request before the
+mutation applies. Kyverno's global admission filters still win, so a filtered HelmRelease remains
+unreachable by this policy. Consumers own chart compatibility with replacing existing CRDs and should opt
+in only where chart-managed CRD upgrades are intended. The shared policy contains no environment-specific
+exclusions.
+
+Flux must also be authorized to carry out the requested CRD lifecycle. When helm-controller impersonation
+is enabled through `spec.serviceAccountName` or a controller-wide default, grant that effective service
+account least-privilege cluster-scoped access to read, create, and update
+`customresourcedefinitions.apiextensions.k8s.io`. Admission can succeed while reconciliation fails if that
+permission is missing; this policy does not require or justify granting blanket `cluster-admin` access.

@@ -1,0 +1,37 @@
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: helm-release-install-crds
+  annotations:
+    policies.kyverno.io/title: Helm Release Install CRDs
+    policies.kyverno.io/category: Flux
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: HelmRelease
+    policies.kyverno.io/minversion: 1.18.0
+    policies.kyverno.io/description: >-
+      Configures Flux HelmRelease v2 resources which opt in with the
+      helm.toolkit.fluxcd.io/crds: enabled label to create and replace chart CRDs
+      during install and upgrade actions.
+spec:
+  background: false
+  rules:
+    - name: set-helm-release-install-crds
+      match:
+        any:
+          - resources:
+              kinds:
+                - helm.toolkit.fluxcd.io/v2/HelmRelease
+              operations:
+                - CREATE
+                - UPDATE
+              selector:
+                matchLabels:
+                  helm.toolkit.fluxcd.io/crds: enabled
+      mutate:
+        patchStrategicMerge:
+          spec:
+            install:
+              crds: CreateReplace
+            upgrade:
+              crds: CreateReplace
