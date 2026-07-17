@@ -2,15 +2,15 @@
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
-  name: web-deployment
+  name: shared-statefulset
   namespace: test
 spec:
   targetRef:
     apiVersion: apps/v1
-    kind: Deployment
-    name: web
+    kind: StatefulSet
+    name: shared
   updatePolicy:
-    updateMode: InPlaceOrRecreate
+    updateMode: Initial
   resourcePolicy:
     containerPolicies:
       - containerName: "*"

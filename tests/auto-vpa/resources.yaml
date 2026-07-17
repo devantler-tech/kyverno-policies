@@ -55,3 +55,62 @@ spec:
       containers:
         - name: node-agent
           image: registry.k8s.io/pause:3.10
+---
+# Regression for issue #2: a Deployment, StatefulSet, and DaemonSet may legally
+# share one name in a namespace. Each must still get its own uniquely named VPA.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shared
+  namespace: test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shared
+  template:
+    metadata:
+      labels:
+        app: shared
+    spec:
+      containers:
+        - name: shared
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: shared
+  namespace: test
+spec:
+  serviceName: shared
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shared
+  template:
+    metadata:
+      labels:
+        app: shared
+    spec:
+      containers:
+        - name: shared
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: shared
+  namespace: test
+spec:
+  selector:
+    matchLabels:
+      app: shared
+  template:
+    metadata:
+      labels:
+        app: shared
+    spec:
+      containers:
+        - name: shared
+          image: registry.k8s.io/pause:3.10

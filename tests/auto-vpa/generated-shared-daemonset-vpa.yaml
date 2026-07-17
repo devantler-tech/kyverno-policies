@@ -2,13 +2,13 @@
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
-  name: web-deployment
+  name: shared-daemonset
   namespace: test
 spec:
   targetRef:
     apiVersion: apps/v1
-    kind: Deployment
-    name: web
+    kind: DaemonSet
+    name: shared
   updatePolicy:
     updateMode: InPlaceOrRecreate
   resourcePolicy:
@@ -16,11 +16,8 @@ spec:
       - containerName: "*"
         controlledResources:
           - cpu
-          - memory
         controlledValues: RequestsAndLimits
         minAllowed:
           cpu: 50m
-          memory: 64Mi
         maxAllowed:
-          cpu: "3"
-          memory: 6Gi
+          cpu: "1"

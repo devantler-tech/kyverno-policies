@@ -29,3 +29,26 @@ results:
     generatedResource: generated-daemonset-vpa.yaml
     kind: DaemonSet
     result: pass
+  # Regression for issue #2: same-name Deployment, StatefulSet, and DaemonSet in
+  # one namespace each generate a distinct, collision-free VPA.
+  - policy: auto-vpa
+    rule: generate-vpa-for-deployment
+    resources:
+      - test/shared
+    generatedResource: generated-shared-deployment-vpa.yaml
+    kind: Deployment
+    result: pass
+  - policy: auto-vpa
+    rule: generate-vpa-for-statefulset
+    resources:
+      - test/shared
+    generatedResource: generated-shared-statefulset-vpa.yaml
+    kind: StatefulSet
+    result: pass
+  - policy: auto-vpa
+    rule: generate-vpa-for-daemonset
+    resources:
+      - test/shared
+    generatedResource: generated-shared-daemonset-vpa.yaml
+    kind: DaemonSet
+    result: pass
