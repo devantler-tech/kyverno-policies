@@ -57,8 +57,12 @@ Important operating constraints:
   one pod have undefined behavior.
 - Exclude workloads that define pod-level `resources`; upstream VPA does not yet support them and its
   container-level recommendation can prevent replacement pods from being admitted.
-- The parity version retains workload-name-only VPA names. Same-name workloads of different kinds are a
-  known collision risk tracked in [issue #2](https://github.com/devantler-tech/kyverno-policies/issues/2).
+- Generated VPA names are suffixed with the workload kind (`<name>-deployment`, `<name>-statefulset`,
+  `<name>-daemonset`) so a Deployment, StatefulSet, and DaemonSet that legally share one name in a
+  namespace each get their own VPA instead of contending for one. Consumers adopting this from an
+  earlier workload-name-only version must clean up the previously generated `<name>` VPAs, which the
+  new rules no longer manage (migration/cleanup tracked in
+  [issue #2](https://github.com/devantler-tech/kyverno-policies/issues/2)).
 - The first shared version deliberately retains the consumers' classic `ClusterPolicy` API. Migration to
   `GeneratingPolicy` is tracked in [issue #1](https://github.com/devantler-tech/kyverno-policies/issues/1).
 

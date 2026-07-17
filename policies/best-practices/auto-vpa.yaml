@@ -26,7 +26,11 @@ spec:
       generate:
         apiVersion: autoscaling.k8s.io/v1
         kind: VerticalPodAutoscaler
-        name: "{{ request.object.metadata.name }}"
+        # Suffix the VPA name with the workload kind: a Deployment, StatefulSet,
+        # and DaemonSet may share one name in a namespace, but a VPA is a single
+        # namespaced object whose targetRef points to exactly one workload — an
+        # unsuffixed name lets same-named kinds contend for one VPA.
+        name: "{{ request.object.metadata.name }}-deployment"
         namespace: "{{ request.object.metadata.namespace }}"
         synchronize: true
         generateExisting: true
@@ -62,7 +66,7 @@ spec:
       generate:
         apiVersion: autoscaling.k8s.io/v1
         kind: VerticalPodAutoscaler
-        name: "{{ request.object.metadata.name }}"
+        name: "{{ request.object.metadata.name }}-statefulset"
         namespace: "{{ request.object.metadata.namespace }}"
         synchronize: true
         generateExisting: true
@@ -98,7 +102,7 @@ spec:
       generate:
         apiVersion: autoscaling.k8s.io/v1
         kind: VerticalPodAutoscaler
-        name: "{{ request.object.metadata.name }}"
+        name: "{{ request.object.metadata.name }}-daemonset"
         namespace: "{{ request.object.metadata.namespace }}"
         synchronize: true
         generateExisting: true
