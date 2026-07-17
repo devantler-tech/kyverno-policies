@@ -59,9 +59,11 @@ Important operating constraints:
   container-level recommendation can prevent replacement pods from being admitted.
 - Generated VPA names are suffixed with the workload kind (`<name>-deployment`, `<name>-statefulset`,
   `<name>-daemonset`) so a Deployment, StatefulSet, and DaemonSet that legally share one name in a
-  namespace each get their own VPA instead of contending for one. Consumers adopting this from an
-  earlier workload-name-only version must clean up the previously generated `<name>` VPAs, which the
-  new rules no longer manage (migration/cleanup tracked in
+  namespace each get their own VPA instead of contending for one. The suffix adds up to 12 characters,
+  so a workload whose name exceeds 241 characters would generate a VPA name past the 253-character
+  DNS-subdomain limit and receive none; keep workload names within that bound (any real workload name is
+  far shorter). Consumers adopting this from an earlier workload-name-only version must clean up the
+  previously generated `<name>` VPAs, which the new rules no longer manage (migration/cleanup tracked in
   [issue #2](https://github.com/devantler-tech/kyverno-policies/issues/2)).
 - The first shared version deliberately retains the consumers' classic `ClusterPolicy` API. Migration to
   `GeneratingPolicy` is tracked in [issue #1](https://github.com/devantler-tech/kyverno-policies/issues/1).

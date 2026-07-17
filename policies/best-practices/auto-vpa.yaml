@@ -30,10 +30,10 @@ spec:
         # and DaemonSet may share one name in a namespace, but a VPA is a single
         # namespaced object whose targetRef points to exactly one workload — an
         # unsuffixed name lets same-named kinds contend for one VPA.
-        # Truncate the name so "<name>-<kind>" stays within the 253-char
-        # DNS-subdomain limit (253 - len("-deployment") = 242); a longer valid
-        # workload name would otherwise generate a name the API server rejects.
-        name: "{{ truncate(request.object.metadata.name, `242`) }}-deployment"
+        # The suffix consumes up to 12 characters, so a workload name must be
+        # <=241 chars for "<name>-<kind>" to fit the 253-char DNS-subdomain limit
+        # (any real workload name is far shorter; see the README constraint).
+        name: "{{ request.object.metadata.name }}-deployment"
         namespace: "{{ request.object.metadata.namespace }}"
         synchronize: true
         generateExisting: true
@@ -69,7 +69,7 @@ spec:
       generate:
         apiVersion: autoscaling.k8s.io/v1
         kind: VerticalPodAutoscaler
-        name: "{{ truncate(request.object.metadata.name, `241`) }}-statefulset"
+        name: "{{ request.object.metadata.name }}-statefulset"
         namespace: "{{ request.object.metadata.namespace }}"
         synchronize: true
         generateExisting: true
@@ -105,7 +105,7 @@ spec:
       generate:
         apiVersion: autoscaling.k8s.io/v1
         kind: VerticalPodAutoscaler
-        name: "{{ truncate(request.object.metadata.name, `243`) }}-daemonset"
+        name: "{{ request.object.metadata.name }}-daemonset"
         namespace: "{{ request.object.metadata.namespace }}"
         synchronize: true
         generateExisting: true
