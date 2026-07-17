@@ -2,7 +2,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: web
+  # Same name as the StatefulSet and DaemonSet below: the collision this policy
+  # guards against — three kinds legally sharing one name in one namespace.
+  name: shared
   namespace: test
 spec:
   replicas: 2
@@ -21,7 +23,7 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: database
+  name: shared
   namespace: test
 spec:
   serviceName: database
@@ -41,7 +43,7 @@ spec:
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: node-agent
+  name: shared
   namespace: test
 spec:
   selector:

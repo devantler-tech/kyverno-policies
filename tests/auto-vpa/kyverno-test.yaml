@@ -11,21 +11,21 @@ results:
   - policy: auto-vpa
     rule: generate-vpa-for-deployment
     resources:
-      - test/web
+      - test/shared
     generatedResource: generated-deployment-vpa.yaml
     kind: Deployment
     result: pass
   - policy: auto-vpa
     rule: generate-vpa-for-statefulset
     resources:
-      - test/database
+      - test/shared
     generatedResource: generated-statefulset-vpa.yaml
     kind: StatefulSet
     result: pass
   - policy: auto-vpa
     rule: generate-vpa-for-daemonset
     resources:
-      - test/node-agent
+      - test/shared
     generatedResource: generated-daemonset-vpa.yaml
     kind: DaemonSet
     result: pass
