@@ -36,6 +36,11 @@ jobs:
         run: kubectl kustomize . > /dev/null
 
       - name: Test policy behavior
+        # Discovers every tests/*/kyverno-test.yaml recursively, so a new policy's
+        # fixture is executed as soon as it exists — no test-runner edit required.
+        run: kyverno test . --require-tests --detailed-results --remove-color
+
+      - name: Test policy structure
         run: bash scripts/test-policy-catalog.sh
 
       - name: Validate scripts and workflow

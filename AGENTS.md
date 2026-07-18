@@ -17,7 +17,7 @@ Consumer wiring and rollout remain separate changes in those repositories.
 - `tests/<policy>/kyverno-test.yaml` — Kyverno CLI behavior contract.
 - `tests/<policy>/generated-*.yaml` — exact generated-resource fixtures.
 - `kustomization.yaml` — root catalog; every published policy must be listed.
-- `scripts/test-policy-catalog.sh` — repository-local behavior test entrypoint.
+- `scripts/test-policy-catalog.sh` — structural invariants `kyverno test` cannot express.
 
 ## Policy rules
 
@@ -40,12 +40,16 @@ Run every gate before opening or updating a PR:
 ```sh
 yamllint .
 kubectl kustomize . > /dev/null
+kyverno test . --require-tests --detailed-results --remove-color
 bash scripts/test-policy-catalog.sh
 shellcheck scripts/test-policy-catalog.sh
 actionlint .github/workflows/ci.yaml
 zizmor .github/workflows/ci.yaml
 git diff --check
 ```
+
+`kyverno test .` discovers every `tests/*/kyverno-test.yaml` recursively, so a new policy is
+behavior-tested as soon as its fixture exists — never add fixture paths to a runner by hand.
 
 Tests are static and local. Never connect to or mutate a live cluster to validate a policy-library diff.
 
