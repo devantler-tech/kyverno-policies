@@ -12,6 +12,7 @@ change.
 | Policy | Behavior | Prerequisites |
 |---|---|---|
 | [`auto-vpa`](policies/best-practices/auto-vpa.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.18+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
+| [`disallow-latest-tag`](policies/best-practices/disallow-latest-tag.yaml) | Audits Pod images that omit a tag or use the mutable `:latest` tag | Kyverno 1.18+ and admission/background processing that includes Pods |
 | [`enforce-flux-best-practices`](policies/flux/enforce-flux-best-practices.yaml) | Validates reliability settings on Flux Kustomizations and HelmReleases | Kyverno 1.18+ and the Flux Kustomization v1 and HelmRelease v2 CRDs |
 | [`helm-release-enable-tests`](policies/flux/helm-release-enable-tests.yaml) | Enables Helm test actions for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
 | [`helm-release-install-crds`](policies/flux/helm-release-install-crds.yaml) | Creates and replaces chart CRDs for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
@@ -25,6 +26,17 @@ kubectl kustomize .
 
 Consumers should pin an immutable repository revision and select policies deliberately. Do not apply the
 catalog to a live cluster directly from a floating branch.
+
+## Image tag behavior
+
+`disallow-latest-tag` audits every image reference in a Pod's normal, init, and ephemeral containers.
+Images must include an explicit tag after the final path segment; a registry port does not count as a
+tag. A versioned tag and a versioned tag-plus-digest reference pass. Tagless references, including
+digest-only references, fail; `:latest` references fail even when paired with a digest.
+
+The shared policy deliberately contains no namespace exclusions. Consumers own any environment-specific
+exceptions and the separately validated decision to promote either rule beyond `Audit`. Kyverno's global
+resource filters still win, so a filtered Pod remains unreachable by this policy.
 
 ## Auto VPA behavior
 

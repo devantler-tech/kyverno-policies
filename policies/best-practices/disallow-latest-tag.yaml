@@ -1,0 +1,58 @@
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Require Explicit Non-Latest Image Tags
+    policies.kyverno.io/category: Best Practices, Supply Chain Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/minversion: 1.18.0
+    pod-policies.kyverno.io/autogen-controllers: none
+    policies.kyverno.io/description: >-
+      Audits Pod images that omit an explicit tag or use the mutable latest
+      tag, including normal, init, and ephemeral containers.
+spec:
+  background: true
+  rules:
+    - name: require-image-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        failureAction: Audit
+        message: >-
+          Container images must include an explicit tag before any digest.
+        foreach:
+          - list: request.object.spec.[ephemeralContainers, initContainers, containers][]
+            deny:
+              conditions:
+                any:
+                  - key: >-
+                      {{ regex_match('^(.*/)?[^/:@]+:[^/:@]+(@[A-Za-z][A-Za-z0-9_+.-]*:[0-9a-fA-F]{32,})?$',
+                      element.image) }}
+                    operator: Equals
+                    value: false
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        failureAction: Audit
+        message: >-
+          The mutable latest tag is not allowed; use a versioned image tag.
+        foreach:
+          - list: request.object.spec.[ephemeralContainers, initContainers, containers][]
+            deny:
+              conditions:
+                any:
+                  - key: >-
+                      {{ regex_match('^(.*/)?[^/:@]+:latest(@[A-Za-z][A-Za-z0-9_+.-]*:[0-9a-fA-F]{32,})?$',
+                      element.image) }}
+                    operator: Equals
+                    value: true
