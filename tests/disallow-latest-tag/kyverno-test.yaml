@@ -1,0 +1,60 @@
+---
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: disallow-latest-tag-validates-all-pod-image-fields
+policies:
+  - ../../policies/best-practices/disallow-latest-tag.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: disallow-latest-tag
+    rule: require-image-tag
+    resources:
+      - apps/tagged-images
+      - apps/tag-and-digest
+      - apps/tag-and-sha512-digest
+      - apps/latest-and-digest
+      - apps/latest-image
+      - apps/latest-init-image
+      - apps/latest-ephemeral-image
+    result: pass
+  - policy: disallow-latest-tag
+    rule: require-image-tag
+    resources:
+      - apps/tagless-image
+      - apps/digest-only-image
+      - apps/registry-port-tagless-image
+      - apps/tagless-init-image
+      - apps/tagless-ephemeral-image
+    result: fail
+  - policy: disallow-latest-tag
+    rule: require-image-tag
+    resources:
+      - apps/non-pod
+    result: skip
+  - policy: disallow-latest-tag
+    rule: disallow-latest-tag
+    resources:
+      - apps/tagged-images
+      - apps/tag-and-digest
+      - apps/tag-and-sha512-digest
+      - apps/tagless-image
+      - apps/digest-only-image
+      - apps/registry-port-tagless-image
+      - apps/tagless-init-image
+      - apps/tagless-ephemeral-image
+    result: pass
+  - policy: disallow-latest-tag
+    rule: disallow-latest-tag
+    resources:
+      - apps/latest-image
+      - apps/latest-and-digest
+      - apps/latest-init-image
+      - apps/latest-ephemeral-image
+    result: fail
+  - policy: disallow-latest-tag
+    rule: disallow-latest-tag
+    resources:
+      - apps/non-pod
+    result: skip

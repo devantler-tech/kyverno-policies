@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 policy="${repo_root}/policies/best-practices/auto-vpa.yaml"
+image_tag_policy="${repo_root}/policies/best-practices/disallow-latest-tag.yaml"
 flux_policy="${repo_root}/policies/flux/enforce-flux-best-practices.yaml"
 helm_crds_policy="${repo_root}/policies/flux/helm-release-install-crds.yaml"
 helm_test_policy="${repo_root}/policies/flux/helm-release-enable-tests.yaml"
@@ -22,6 +23,52 @@ assert_equal() {
 
 if [[ ! -f "${policy}" ]]; then
   echo "FAIL: shared catalog is missing policies/best-practices/auto-vpa.yaml" >&2
+  exit 1
+fi
+
+if [[ ! -f "${image_tag_policy}" ]]; then
+  echo "FAIL: shared catalog is missing policies/best-practices/disallow-latest-tag.yaml" >&2
+  exit 1
+fi
+
+assert_equal "$(yq '.apiVersion' "${image_tag_policy}")" "kyverno.io/v1" \
+  "shared image-tag policy must use kyverno.io/v1"
+assert_equal "$(yq '.kind' "${image_tag_policy}")" "ClusterPolicy" \
+  "shared image-tag policy must use ClusterPolicy"
+assert_equal "$(yq '.metadata.name' "${image_tag_policy}")" "disallow-latest-tag" \
+  "shared image-tag policy must use its catalog identity"
+assert_equal "$(yq '.metadata.annotations."policies.kyverno.io/minversion"' \
+  "${image_tag_policy}")" "1.18.0" \
+  "shared image-tag policy must declare the catalog Kyverno floor"
+assert_equal "$(yq '.spec.background' "${image_tag_policy}")" "true" \
+  "shared image-tag policy must evaluate existing Pods"
+assert_equal "$(yq '.spec.rules | length' "${image_tag_policy}")" "2" \
+  "shared image-tag policy must expose tag-presence and latest-tag rules"
+assert_equal "$(yq '[.spec.rules[].name | select(
+  . == "require-image-tag" or . == "disallow-latest-tag"
+)] | length' "${image_tag_policy}")" "2" \
+  "shared image-tag policy must expose both documented rules"
+assert_equal "$(yq '[.spec.rules[].validate | select(.failureAction == "Audit")] | length' \
+  "${image_tag_policy}")" "2" \
+  "shared image-tag policy must default every rule to Audit"
+assert_equal "$(yq '[.spec.rules[].match.any[].resources.kinds[]] | sort | join(",")' \
+  "${image_tag_policy}")" "Pod,Pod" \
+  "shared image-tag policy must match only Pods"
+assert_equal "$(yq '[.. | select(tag == "!!map") | select(has("exclude"))] | length' \
+  "${image_tag_policy}")" "0" \
+  "shared image-tag policy must leave environment exclusions to consumers"
+assert_equal "$(yq '[.spec.rules[] | select(has("mutate") or has("generate"))] | length' \
+  "${image_tag_policy}")" "0" \
+  "shared image-tag policy must validate without mutating or generating resources"
+assert_equal "$(yq '[.resources[] |
+  select(. == "policies/best-practices/disallow-latest-tag.yaml")
+] | length' "${repo_root}/kustomization.yaml")" "1" \
+  "shared image-tag policy must be registered exactly once"
+
+if ! grep -Fq \
+  'policies/best-practices/disallow-latest-tag.yaml' \
+  "${repo_root}/README.md"; then
+  echo "FAIL: README catalog is missing disallow-latest-tag" >&2
   exit 1
 fi
 
