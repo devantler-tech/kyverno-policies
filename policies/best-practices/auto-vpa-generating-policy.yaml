@@ -1,0 +1,215 @@
+---
+# Ported form of policies/best-practices/auto-vpa.yaml onto the GeneratingPolicy API.
+#
+# DELIBERATELY NOT REGISTERED in the root kustomization.yaml. Consumers reference the
+# catalog, so leaving this out of the catalog is how the port ships without reaching any
+# cluster: it can be proven here, and adopted later as a separate, reversible step.
+# Registering it while the classic auto-vpa is still registered would have BOTH forms
+# generating a VerticalPodAutoscaler for the same workload under the same name.
+#
+# Split into one policy per workload kind, mirroring the classic policy's three rules:
+# GeneratingPolicy applies spec.matchConstraints to the whole policy, so three kinds with
+# three different VPA bodies cannot share one policy without branching inside CEL.
+#
+# ⚠️ KNOWN 1.18.x LIMITATION — generateExisting parity needs Kyverno >= 1.19. The
+# spec.evaluation.generateExisting field is accepted by the 1.18 schema but the behaviour
+# does not fire for PRE-EXISTING triggers (kyverno/kyverno#15722, a regression vs the
+# classic rule; fixed by kyverno/kyverno#16041, milestone 1.19.0, NOT backported to any
+# 1.18.x release as of 1.18.2). On 1.18.x an existing workload only gets its VPA on its
+# next CREATE/UPDATE admission. ADOPTION GATE: registering this port as the catalog's
+# auto-vpa form with full classic parity requires the consumer to run Kyverno >= 1.19;
+# until then the classic policy remains the registered form.
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: auto-vpa-deployment
+  annotations:
+    policies.kyverno.io/title: Auto VPA for Deployments (GeneratingPolicy)
+    policies.kyverno.io/category: Autoscaling
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: Deployment
+    policies.kyverno.io/minversion: 1.18.0
+    policies.kyverno.io/description: >-
+      Generates a recommendation-bounded VerticalPodAutoscaler for each Deployment.
+      GeneratingPolicy form of the auto-vpa rule of the same name; kept out of the
+      catalog until consumers migrate.
+spec:
+  # Parity with the classic rules' `synchronize: true` + `generateExisting: true`:
+  # on GeneratingPolicy both live under spec.evaluation and default to false, so
+  # omitting them would silently drop behavior the classic policy guarantees.
+  evaluation:
+    generateExisting:
+      enabled: true
+    synchronize:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+  generate:
+    # Every value is dyn(): CEL infers a map's value type from its first entry, so a
+    # resource literal mixing strings with nested maps fails to compile without it.
+    # Fields read off `object` are dyn and need string() before concatenation.
+    - expression: >-
+        generator.Apply(
+          string(object.metadata.namespace),
+          [
+            {
+              "apiVersion": dyn("autoscaling.k8s.io/v1"),
+              "kind": dyn("VerticalPodAutoscaler"),
+              "metadata": dyn({
+                "name": string(object.metadata.name) + "-deployment",
+                "namespace": string(object.metadata.namespace)
+              }),
+              "spec": dyn({
+                "targetRef": dyn({
+                  "apiVersion": "apps/v1",
+                  "kind": "Deployment",
+                  "name": string(object.metadata.name)
+                }),
+                "updatePolicy": dyn({"updateMode": "InPlaceOrRecreate"}),
+                "resourcePolicy": dyn({
+                  "containerPolicies": [
+                    {
+                      "containerName": dyn("*"),
+                      "controlledResources": dyn(["cpu", "memory"]),
+                      "controlledValues": dyn("RequestsAndLimits"),
+                      "minAllowed": dyn({"cpu": "50m", "memory": "64Mi"}),
+                      "maxAllowed": dyn({"cpu": "3", "memory": "6Gi"})
+                    }
+                  ]
+                })
+              })
+            }
+          ]
+        )
+---
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: auto-vpa-statefulset
+  annotations:
+    policies.kyverno.io/title: Auto VPA for StatefulSets (GeneratingPolicy)
+    policies.kyverno.io/category: Autoscaling
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: StatefulSet
+    policies.kyverno.io/minversion: 1.18.0
+    policies.kyverno.io/description: >-
+      Generates a recommendation-bounded VerticalPodAutoscaler for each StatefulSet.
+      GeneratingPolicy form of the auto-vpa rule of the same name; kept out of the
+      catalog until consumers migrate.
+spec:
+  # Parity with the classic rules' `synchronize: true` + `generateExisting: true`:
+  # on GeneratingPolicy both live under spec.evaluation and default to false, so
+  # omitting them would silently drop behavior the classic policy guarantees.
+  evaluation:
+    generateExisting:
+      enabled: true
+    synchronize:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["statefulsets"]
+  generate:
+    - expression: >-
+        generator.Apply(
+          string(object.metadata.namespace),
+          [
+            {
+              "apiVersion": dyn("autoscaling.k8s.io/v1"),
+              "kind": dyn("VerticalPodAutoscaler"),
+              "metadata": dyn({
+                "name": string(object.metadata.name) + "-statefulset",
+                "namespace": string(object.metadata.namespace)
+              }),
+              "spec": dyn({
+                "targetRef": dyn({
+                  "apiVersion": "apps/v1",
+                  "kind": "StatefulSet",
+                  "name": string(object.metadata.name)
+                }),
+                "updatePolicy": dyn({"updateMode": "Initial"}),
+                "resourcePolicy": dyn({
+                  "containerPolicies": [
+                    {
+                      "containerName": dyn("*"),
+                      "controlledResources": dyn(["cpu", "memory"]),
+                      "controlledValues": dyn("RequestsAndLimits"),
+                      "minAllowed": dyn({"cpu": "50m", "memory": "64Mi"}),
+                      "maxAllowed": dyn({"cpu": "3", "memory": "6Gi"})
+                    }
+                  ]
+                })
+              })
+            }
+          ]
+        )
+---
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: auto-vpa-daemonset
+  annotations:
+    policies.kyverno.io/title: Auto VPA for DaemonSets (GeneratingPolicy)
+    policies.kyverno.io/category: Autoscaling
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: DaemonSet
+    policies.kyverno.io/minversion: 1.18.0
+    policies.kyverno.io/description: >-
+      Generates a CPU-only recommendation-bounded VerticalPodAutoscaler for each
+      DaemonSet. GeneratingPolicy form of the auto-vpa rule of the same name; kept out
+      of the catalog until consumers migrate.
+spec:
+  # Parity with the classic rules' `synchronize: true` + `generateExisting: true`:
+  # on GeneratingPolicy both live under spec.evaluation and default to false, so
+  # omitting them would silently drop behavior the classic policy guarantees.
+  evaluation:
+    generateExisting:
+      enabled: true
+    synchronize:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["daemonsets"]
+  generate:
+    - expression: >-
+        generator.Apply(
+          string(object.metadata.namespace),
+          [
+            {
+              "apiVersion": dyn("autoscaling.k8s.io/v1"),
+              "kind": dyn("VerticalPodAutoscaler"),
+              "metadata": dyn({
+                "name": string(object.metadata.name) + "-daemonset",
+                "namespace": string(object.metadata.namespace)
+              }),
+              "spec": dyn({
+                "targetRef": dyn({
+                  "apiVersion": "apps/v1",
+                  "kind": "DaemonSet",
+                  "name": string(object.metadata.name)
+                }),
+                "updatePolicy": dyn({"updateMode": "InPlaceOrRecreate"}),
+                "resourcePolicy": dyn({
+                  "containerPolicies": [
+                    {
+                      "containerName": dyn("*"),
+                      "controlledResources": dyn(["cpu"]),
+                      "controlledValues": dyn("RequestsAndLimits"),
+                      "minAllowed": dyn({"cpu": "50m"}),
+                      "maxAllowed": dyn({"cpu": "1"})
+                    }
+                  ]
+                })
+              })
+            }
+          ]
+        )
