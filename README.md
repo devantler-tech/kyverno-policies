@@ -73,7 +73,7 @@ Important operating constraints:
 
 Kyverno is retiring classic `ClusterPolicy` generate rules after the 1.19 support window, so
 [`auto-vpa-generating-policy.yaml`](policies/best-practices/auto-vpa-generating-policy.yaml) carries the
-same three rules on the `policies.kyverno.io/v1alpha1` `GeneratingPolicy` API, one policy per workload
+same three rules on the `policies.kyverno.io/v1` `GeneratingPolicy` API, one policy per workload
 kind. It requires Kyverno 1.18+, the same floor as the rest of the catalog.
 
 **It is not registered in `kustomization.yaml`, so it reaches no cluster.** Consumers select policies from
