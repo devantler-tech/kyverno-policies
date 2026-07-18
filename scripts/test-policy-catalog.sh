@@ -469,6 +469,45 @@ if [[ "${flux_legacy_helmrelease_match_count}" -ne 0 ]]; then
   exit 1
 fi
 
+# The GeneratingPolicy port of auto-vpa and the classic form generate a VerticalPodAutoscaler
+# under the SAME name for the SAME workload. Registering both in the catalog would have two
+# policies contend for one object on every consumer cluster, so the catalog may carry at most
+# one of them -- and must never carry neither, which would silently drop auto-vpa entirely.
+# This is what keeps the port default-off while it is unadopted, and it stays correct after
+# adoption flips which of the two is registered.
+ported_vpa_policy="${repo_root}/policies/best-practices/auto-vpa-generating-policy.yaml"
+
+if [[ ! -f "${ported_vpa_policy}" ]]; then
+  echo "FAIL: shared catalog is missing policies/best-practices/auto-vpa-generating-policy.yaml" >&2
+  exit 1
+fi
+
+classic_vpa_registered="$(
+  yq '[.resources[] | select(. == "policies/best-practices/auto-vpa.yaml")] | length' \
+    "${repo_root}/kustomization.yaml"
+)"
+ported_vpa_registered="$(
+  yq '[.resources[] | select(. == "policies/best-practices/auto-vpa-generating-policy.yaml")] | length' \
+    "${repo_root}/kustomization.yaml"
+)"
+
+if [[ "${classic_vpa_registered}" -gt 0 && "${ported_vpa_registered}" -gt 0 ]]; then
+  echo "FAIL: classic and GeneratingPolicy auto-vpa must not both be registered" >&2
+  exit 1
+fi
+
+if [[ "${classic_vpa_registered}" -eq 0 && "${ported_vpa_registered}" -eq 0 ]]; then
+  echo "FAIL: the catalog must register exactly one auto-vpa form" >&2
+  exit 1
+fi
+
+ported_vpa_policy_count="$(yq --no-doc '.metadata.name' "${ported_vpa_policy}" | wc -l | tr -d ' ')"
+
+if [[ "${ported_vpa_policy_count}" -ne 3 ]]; then
+  echo "FAIL: ported auto-vpa must define one GeneratingPolicy per workload kind" >&2
+  exit 1
+fi
+
 rule_count="$(yq '.spec.rules | length' "${policy}")"
 synchronized_rule_count="$(
   yq '[.spec.rules[].generate | select(.synchronize == true and .generateExisting == true)] | length' \

@@ -65,8 +65,30 @@ Important operating constraints:
   far shorter). Consumers adopting this from an earlier workload-name-only version must clean up the
   previously generated `<name>` VPAs, which the new rules no longer manage (migration/cleanup tracked in
   [issue #2](https://github.com/devantler-tech/kyverno-policies/issues/2)).
-- The first shared version deliberately retains the consumers' classic `ClusterPolicy` API. Migration to
-  `GeneratingPolicy` is tracked in [issue #1](https://github.com/devantler-tech/kyverno-policies/issues/1).
+- The catalog still ships the classic `ClusterPolicy` form. A `GeneratingPolicy` port exists alongside it
+  but is not in the catalog yet -- see below. Migration is tracked in
+  [issue #1](https://github.com/devantler-tech/kyverno-policies/issues/1).
+
+### The GeneratingPolicy port
+
+Kyverno is retiring classic `ClusterPolicy` generate rules after the 1.19 support window, so
+[`auto-vpa-generating-policy.yaml`](policies/best-practices/auto-vpa-generating-policy.yaml) carries the
+same three rules on the `policies.kyverno.io/v1alpha1` `GeneratingPolicy` API, one policy per workload
+kind. It requires Kyverno 1.18+, the same floor as the rest of the catalog.
+
+**It is not registered in `kustomization.yaml`, so it reaches no cluster.** Consumers select policies from
+the catalog, so leaving the port out is how it ships without being live: you get a migration target that
+is proven before anything is asked to move. Both forms generate a VPA under the same name for the same
+workload, so registering them together would have two policies contend for one object -- the catalog
+therefore enforces that exactly one of the two is registered at a time.
+
+Its tests assert the ported policies against the *same* expected-output fixtures the classic policy is
+held to (`tests/auto-vpa/generated-*-vpa.yaml`) rather than expectations written next to the new code,
+because that is the only version of the check that can actually detect divergence.
+
+One translation note for anyone extending it: CEL infers a map's value type from its first entry, so
+resource literals wrap every value in `dyn(...)`, and fields read off `object` need `string(...)` before
+being concatenated.
 
 ## Validate changes
 
