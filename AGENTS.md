@@ -62,6 +62,9 @@ Tests are static and local. Never connect to or mutate a live cluster to validat
 ## Maintenance
 
 GitHub Issues are the roadmap and work queue. Resolve the oldest actionable issue first, ship changes as
-draft PRs with Conventional-Commit titles and the Daily AI disclosure, and keep drafts review-ready without
-self-promoting them. Keep this file, the README catalog, tests, and CI in sync whenever policy conventions
-or validation commands change.
+draft PRs with Conventional-Commit titles and the Daily AI disclosure, and self-promote a draft only on
+genuine readiness — programmatically tested, a green review at the current head satisfying the shared
+green-review gate (CodeRabbit or Codex; the documented agent self-review fallback applies only when both
+lanes are genuinely unavailable), and tried and evaluated as a user (monorepo `AGENTS.md` → *Autonomy*)
+— then drive it to merge. Keep this file, the README catalog, tests, and CI in sync whenever policy
+conventions or validation commands change.
