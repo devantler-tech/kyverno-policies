@@ -74,7 +74,12 @@ Important operating constraints:
 Kyverno is retiring classic `ClusterPolicy` generate rules after the 1.19 support window, so
 [`auto-vpa-generating-policy.yaml`](policies/best-practices/auto-vpa-generating-policy.yaml) carries the
 same three rules on the `policies.kyverno.io/v1` `GeneratingPolicy` API, one policy per workload
-kind. It requires Kyverno 1.18+, the same floor as the rest of the catalog.
+kind. It loads and serves admission-time generation on Kyverno 1.18+, the same floor as the rest of
+the catalog — **but adopting it as the registered auto-vpa form with full classic parity requires
+Kyverno ≥ 1.19**: on 1.18.x, `generateExisting` is schema-accepted yet inert for pre-existing
+workloads ([kyverno/kyverno#15722](https://github.com/kyverno/kyverno/issues/15722); fixed for 1.19
+by [#16041](https://github.com/kyverno/kyverno/pull/16041), not backported), so a 1.18.x migration
+would leave existing workloads without VPAs until their next update.
 
 **It is not registered in `kustomization.yaml`, so it reaches no cluster.** Consumers select policies from
 the catalog, so leaving the port out is how it ships without being live: you get a migration target that
