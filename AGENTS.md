@@ -51,6 +51,12 @@ git diff --check
 `kyverno test .` discovers every `tests/*/kyverno-test.yaml` recursively, so a new policy is
 behavior-tested as soon as its fixture exists — never add fixture paths to a runner by hand.
 
+CI pins the Kyverno CLI via `KYVERNO_CLI_VERSION` in
+[`.github/workflows/ci.yaml`](.github/workflows/ci.yaml), because that CLI decides how the behavior
+gate evaluates the catalog. Match it locally (`kyverno version`) so a local pass means the same thing
+as a CI pass. Raising a policy's `policies.kyverno.io/minversion` above the pinned CLI fails CI by
+design — bump the pin in the same change.
+
 Tests are static and local. Never connect to or mutate a live cluster to validate a policy-library diff.
 
 ## Maintenance

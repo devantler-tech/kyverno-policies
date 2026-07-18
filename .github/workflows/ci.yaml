@@ -15,6 +15,20 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # The Kyverno CLI defines the semantics of the behavior gate below, so it is pinned
+  # rather than floating: an unpinned CLI can change how `kyverno test` evaluates the
+  # catalog without a single line of this repository changing.
+  # Keep at or above the `policies.kyverno.io/minversion` floor the policies declare —
+  # the "Verify Kyverno CLI" step below enforces that, so the two cannot drift apart.
+  KYVERNO_CLI_VERSION: 1.18.2
+  # Digests are pinned HERE rather than taken from the release's own checksums.txt: a Git
+  # tag is mutable, so a checksum fetched alongside the asset it verifies would simply be
+  # replaced together with it. Bump these with KYVERNO_CLI_VERSION, from the upstream
+  # checksums.txt of the new release.
+  KYVERNO_CLI_SHA256_ARM64: cc69bc6638da1993146c134943fac91cbc9dd0ce60a3e88c6d7c518ae00f1abc
+  KYVERNO_CLI_SHA256_X86_64: a461096a3111e6a4134c2bd135ddd8e0bfd9d466a5d5b17810b76a484fffdae4
+
 jobs:
   required:
     name: CI - Required Checks
@@ -27,7 +41,78 @@ jobs:
           persist-credentials: false
 
       - name: Install policy tooling
-        run: brew install actionlint kubernetes-cli kyverno shellcheck yamllint yq zizmor
+        run: brew install actionlint kubernetes-cli shellcheck yamllint yq zizmor
+
+      - name: Install pinned Kyverno CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+
+          case "$(uname -m)" in
+            arm64) arch=arm64; expected="${KYVERNO_CLI_SHA256_ARM64}" ;;
+            x86_64) arch=x86_64; expected="${KYVERNO_CLI_SHA256_X86_64}" ;;
+            *) echo "::error::unsupported runner architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+
+          asset="kyverno-cli_v${KYVERNO_CLI_VERSION}_darwin_${arch}.tar.gz"
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "${workdir}"' EXIT
+
+          gh release download "v${KYVERNO_CLI_VERSION}" \
+            --repo kyverno/kyverno \
+            --pattern "${asset}" \
+            --dir "${workdir}"
+
+          # Verify against the digest pinned in this repository. Deliberately NOT the
+          # release's own checksums.txt: that travels with the asset, so re-pointing a
+          # mutable tag would replace both and the check would still pass.
+          echo "${expected}  ${asset}" > "${workdir}/expected.sha256"
+          (cd "${workdir}" && shasum -a 256 -c expected.sha256)
+
+          tar -xzf "${workdir}/${asset}" -C "${workdir}" kyverno
+          install -m 0755 "${workdir}/kyverno" /usr/local/bin/kyverno
+
+      - name: Verify Kyverno CLI
+        # Fails closed if the pinned CLI is not what CI actually got, or if it sits below
+        # the floor the policies advertise via policies.kyverno.io/minversion.
+        run: |
+          set -Eeuo pipefail
+
+          installed="$(kyverno version | awk '/^Version:/ { print $2 }' | sed 's/^v//')"
+          if [[ "${installed}" != "${KYVERNO_CLI_VERSION}" ]]; then
+            echo "::error::Kyverno CLI is ${installed}, expected the pinned ${KYVERNO_CLI_VERSION}" >&2
+            exit 1
+          fi
+
+          # --no-doc matters: without it yq emits a `---` separator per file, and the
+          # values read back include separators rather than versions.
+          declared="$(yq -r --no-doc '.metadata.annotations."policies.kyverno.io/minversion"' \
+            policies/*/*.yaml)"
+
+          if [[ -z "${declared}" ]]; then
+            echo "::error::no policy declares a policies.kyverno.io/minversion annotation" >&2
+            exit 1
+          fi
+
+          # Validate EVERY declared floor, not just the maximum: a malformed or empty
+          # annotation sorts below a valid one and would otherwise never be looked at,
+          # leaving the guard silently fail-open for that policy.
+          while IFS= read -r value; do
+            if [[ ! "${value}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::policies.kyverno.io/minversion must be a semver version (got '${value}')" >&2
+              exit 1
+            fi
+          done <<< "${declared}"
+
+          floor="$(printf '%s\n' "${declared}" | sort -V | tail -n 1)"
+
+          if [[ "$(printf '%s\n%s\n' "${floor}" "${installed}" | sort -V | head -n 1)" != "${floor}" ]]; then
+            echo "::error::pinned Kyverno CLI ${installed} is below the catalog floor ${floor}" >&2
+            exit 1
+          fi
+
+          echo "Kyverno CLI ${installed} pinned and at or above the catalog floor ${floor}."
 
       - name: Validate YAML
         run: yamllint .
