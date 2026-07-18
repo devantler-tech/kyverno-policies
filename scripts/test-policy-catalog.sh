@@ -508,6 +508,32 @@ if [[ "${ported_vpa_policy_count}" -ne 3 ]]; then
   exit 1
 fi
 
+# The ported policies must use the graduated API: v1alpha1 is marked deprecated on the
+# GeneratingPolicy CRD at the catalog's 1.18 floor (still served there, but scheduled to
+# disappear), so only policies.kyverno.io/v1 keeps the catalog forward-compatible.
+ported_vpa_v1_count="$(
+  yq --no-doc '[select(.apiVersion == "policies.kyverno.io/v1")] | length' \
+    "${ported_vpa_policy}" | awk '{s+=$1} END {print s}'
+)"
+
+if [[ "${ported_vpa_v1_count}" -ne 3 ]]; then
+  echo "FAIL: ported auto-vpa must use the graduated policies.kyverno.io/v1 API" >&2
+  exit 1
+fi
+
+# Parity with the classic rules' synchronize/generateExisting: on GeneratingPolicy both
+# live under spec.evaluation and DEFAULT TO FALSE, so a port that omits them silently
+# drops behavior the classic policy guarantees.
+ported_vpa_synchronized_count="$(
+  yq --no-doc '[select(.spec.evaluation.synchronize.enabled == true and .spec.evaluation.generateExisting.enabled == true)] | length' \
+    "${ported_vpa_policy}" | awk '{s+=$1} END {print s}'
+)"
+
+if [[ "${ported_vpa_synchronized_count}" -ne 3 ]]; then
+  echo "FAIL: every ported auto-vpa policy must enable evaluation.synchronize and evaluation.generateExisting" >&2
+  exit 1
+fi
+
 rule_count="$(yq '.spec.rules | length' "${policy}")"
 synchronized_rule_count="$(
   yq '[.spec.rules[].generate | select(.synchronize == true and .generateExisting == true)] | length' \
@@ -526,7 +552,9 @@ fi
 # structural invariants that `kyverno test` cannot express.
 
 output_dir="$(mktemp -d)"
-trap 'rm -rf "${output_dir}"' EXIT
+ported_positive_dir="$(mktemp -d)"
+ported_negative_dir="$(mktemp -d)"
+trap 'rm -rf "${output_dir}" "${ported_positive_dir}" "${ported_negative_dir}"' EXIT
 
 kyverno apply "${policy}" \
   --resource "${repo_root}/tests/auto-vpa/unmatched-job.yaml" \
@@ -535,5 +563,32 @@ kyverno apply "${policy}" \
 
 if find "${output_dir}" -type f -print -quit | grep -q .; then
   echo "FAIL: auto-vpa generated a resource for an unmatched Job" >&2
+  exit 1
+fi
+
+# The same matched/unmatched control pair for the PORTED form, registered or not — the
+# port ships in this repo, so its behavior is held here rather than only after adoption.
+# The positive control comes FIRST because it is what gives the negative control teeth:
+# `kyverno apply` silently drops a policy it cannot parse ("Applying 0 policy rule(s)",
+# exit 0), which would make "no files generated for a Job" pass vacuously.
+kyverno apply "${ported_vpa_policy}" \
+  --resource "${repo_root}/tests/auto-vpa/resources.yaml" \
+  --output "${ported_positive_dir}" \
+  --remove-color >/dev/null
+
+ported_generated_count="$(find "${ported_positive_dir}" -type f | wc -l | tr -d ' ')"
+
+if [[ "${ported_generated_count}" -ne 3 ]]; then
+  echo "FAIL: ported auto-vpa must generate one VPA per matched workload kind (got ${ported_generated_count})" >&2
+  exit 1
+fi
+
+kyverno apply "${ported_vpa_policy}" \
+  --resource "${repo_root}/tests/auto-vpa/unmatched-job.yaml" \
+  --output "${ported_negative_dir}" \
+  --remove-color >/dev/null
+
+if find "${ported_negative_dir}" -type f -print -quit | grep -q .; then
+  echo "FAIL: ported auto-vpa generated a resource for an unmatched Job" >&2
   exit 1
 fi

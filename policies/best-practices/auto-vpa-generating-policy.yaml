@@ -10,7 +10,7 @@
 # Split into one policy per workload kind, mirroring the classic policy's three rules:
 # GeneratingPolicy applies spec.matchConstraints to the whole policy, so three kinds with
 # three different VPA bodies cannot share one policy without branching inside CEL.
-apiVersion: policies.kyverno.io/v1alpha1
+apiVersion: policies.kyverno.io/v1
 kind: GeneratingPolicy
 metadata:
   name: auto-vpa-deployment
@@ -25,6 +25,14 @@ metadata:
       GeneratingPolicy form of the auto-vpa rule of the same name; kept out of the
       catalog until consumers migrate.
 spec:
+  # Parity with the classic rules' `synchronize: true` + `generateExisting: true`:
+  # on GeneratingPolicy both live under spec.evaluation and default to false, so
+  # omitting them would silently drop behavior the classic policy guarantees.
+  evaluation:
+    generateExisting:
+      enabled: true
+    synchronize:
+      enabled: true
   matchConstraints:
     resourceRules:
       - apiGroups: ["apps"]
@@ -69,7 +77,7 @@ spec:
           ]
         )
 ---
-apiVersion: policies.kyverno.io/v1alpha1
+apiVersion: policies.kyverno.io/v1
 kind: GeneratingPolicy
 metadata:
   name: auto-vpa-statefulset
@@ -84,6 +92,14 @@ metadata:
       GeneratingPolicy form of the auto-vpa rule of the same name; kept out of the
       catalog until consumers migrate.
 spec:
+  # Parity with the classic rules' `synchronize: true` + `generateExisting: true`:
+  # on GeneratingPolicy both live under spec.evaluation and default to false, so
+  # omitting them would silently drop behavior the classic policy guarantees.
+  evaluation:
+    generateExisting:
+      enabled: true
+    synchronize:
+      enabled: true
   matchConstraints:
     resourceRules:
       - apiGroups: ["apps"]
@@ -125,7 +141,7 @@ spec:
           ]
         )
 ---
-apiVersion: policies.kyverno.io/v1alpha1
+apiVersion: policies.kyverno.io/v1
 kind: GeneratingPolicy
 metadata:
   name: auto-vpa-daemonset
@@ -140,6 +156,14 @@ metadata:
       DaemonSet. GeneratingPolicy form of the auto-vpa rule of the same name; kept out
       of the catalog until consumers migrate.
 spec:
+  # Parity with the classic rules' `synchronize: true` + `generateExisting: true`:
+  # on GeneratingPolicy both live under spec.evaluation and default to false, so
+  # omitting them would silently drop behavior the classic policy guarantees.
+  evaluation:
+    generateExisting:
+      enabled: true
+    synchronize:
+      enabled: true
   matchConstraints:
     resourceRules:
       - apiGroups: ["apps"]
