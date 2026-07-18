@@ -1,4 +1,4 @@
-# AGENTS.md â shared Kyverno policy library
+# AGENTS.md — shared Kyverno policy library
 
 This is the canonical instruction file for humans and AI agents working in this repository. It defers
 to the devantler-tech monorepo [`AGENTS.md`](https://github.com/devantler-tech/monorepo/blob/main/AGENTS.md)
@@ -13,11 +13,11 @@ Consumer wiring and rollout remain separate changes in those repositories.
 
 ## Structure
 
-- `policies/<category>/<policy>.yaml` â one policy per file.
-- `tests/<policy>/kyverno-test.yaml` â Kyverno CLI behavior contract.
-- `tests/<policy>/generated-*.yaml` â exact generated-resource fixtures.
-- `kustomization.yaml` â root catalog; every published policy must be listed.
-- `scripts/test-policy-catalog.sh` â structural invariants `kyverno test` cannot express.
+- `policies/<category>/<policy>.yaml` — one policy per file.
+- `tests/<policy>/kyverno-test.yaml` — Kyverno CLI behavior contract.
+- `tests/<policy>/generated-*.yaml` — exact generated-resource fixtures.
+- `kustomization.yaml` — root catalog; every published policy must be listed.
+- `scripts/test-policy-catalog.sh` — structural invariants `kyverno test` cannot express.
 
 ## Policy rules
 
@@ -49,13 +49,13 @@ git diff --check
 ```
 
 `kyverno test .` discovers every `tests/*/kyverno-test.yaml` recursively, so a new policy is
-behavior-tested as soon as its fixture exists â never add fixture paths to a runner by hand.
+behavior-tested as soon as its fixture exists — never add fixture paths to a runner by hand.
 
 CI pins the Kyverno CLI via `KYVERNO_CLI_VERSION` in
 [`.github/workflows/ci.yaml`](.github/workflows/ci.yaml), because that CLI decides how the behavior
 gate evaluates the catalog. Match it locally (`kyverno version`) so a local pass means the same thing
 as a CI pass. Raising a policy's `policies.kyverno.io/minversion` above the pinned CLI fails CI by
-design â bump the pin in the same change.
+design — bump the pin in the same change.
 
 Tests are static and local. Never connect to or mutate a live cluster to validate a policy-library diff.
 
@@ -63,7 +63,7 @@ Tests are static and local. Never connect to or mutate a live cluster to validat
 
 GitHub Issues are the roadmap and work queue. Resolve the oldest actionable issue first and ship changes as
 draft PRs with Conventional-Commit titles and the Daily AI disclosure. Promote a draft yourself only when it
-is genuinely ready â programmatically tested, carrying a green review at the current head, and tried and
-evaluated as a user â then drive it to merge (monorepo AGENTS.md → *Autonomy*, maintainer direction
+is genuinely ready — programmatically tested, carrying a green review at the current head, and tried and
+evaluated as a user — then drive it to merge (monorepo AGENTS.md → *Autonomy*, maintainer direction
 2026-07-16/18). Keep this file, the README catalog, tests, and CI in sync whenever policy conventions
 or validation commands change.
