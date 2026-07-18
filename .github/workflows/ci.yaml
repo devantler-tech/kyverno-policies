@@ -22,6 +22,12 @@ env:
   # Keep at or above the `policies.kyverno.io/minversion` floor the policies declare —
   # the "Verify Kyverno CLI" step below enforces that, so the two cannot drift apart.
   KYVERNO_CLI_VERSION: 1.18.2
+  # Digests are pinned HERE rather than taken from the release's own checksums.txt: a Git
+  # tag is mutable, so a checksum fetched alongside the asset it verifies would simply be
+  # replaced together with it. Bump these with KYVERNO_CLI_VERSION, from the upstream
+  # checksums.txt of the new release.
+  KYVERNO_CLI_SHA256_ARM64: cc69bc6638da1993146c134943fac91cbc9dd0ce60a3e88c6d7c518ae00f1abc
+  KYVERNO_CLI_SHA256_X86_64: a461096a3111e6a4134c2bd135ddd8e0bfd9d466a5d5b17810b76a484fffdae4
 
 jobs:
   required:
@@ -44,8 +50,8 @@ jobs:
           set -Eeuo pipefail
 
           case "$(uname -m)" in
-            arm64) arch=arm64 ;;
-            x86_64) arch=x86_64 ;;
+            arm64) arch=arm64; expected="${KYVERNO_CLI_SHA256_ARM64}" ;;
+            x86_64) arch=x86_64; expected="${KYVERNO_CLI_SHA256_X86_64}" ;;
             *) echo "::error::unsupported runner architecture: $(uname -m)" >&2; exit 1 ;;
           esac
 
@@ -56,12 +62,13 @@ jobs:
           gh release download "v${KYVERNO_CLI_VERSION}" \
             --repo kyverno/kyverno \
             --pattern "${asset}" \
-            --pattern checksums.txt \
             --dir "${workdir}"
 
-          # Verify against the checksum file published with this same pinned release, so a
-          # tampered or truncated download cannot silently become the gate.
-          (cd "${workdir}" && grep " ${asset}\$" checksums.txt | shasum -a 256 -c -)
+          # Verify against the digest pinned in this repository. Deliberately NOT the
+          # release's own checksums.txt: that travels with the asset, so re-pointing a
+          # mutable tag would replace both and the check would still pass.
+          echo "${expected}  ${asset}" > "${workdir}/expected.sha256"
+          (cd "${workdir}" && shasum -a 256 -c expected.sha256)
 
           tar -xzf "${workdir}/${asset}" -C "${workdir}" kyverno
           install -m 0755 "${workdir}/kyverno" /usr/local/bin/kyverno
@@ -79,16 +86,26 @@ jobs:
           fi
 
           # --no-doc matters: without it yq emits a `---` separator per file, and the
-          # highest "version" read back is the separator rather than a version at all.
-          floor="$(yq -r --no-doc '.metadata.annotations."policies.kyverno.io/minversion"' \
-            policies/*/*.yaml | sort -V | tail -n 1)"
+          # values read back include separators rather than versions.
+          declared="$(yq -r --no-doc '.metadata.annotations."policies.kyverno.io/minversion"' \
+            policies/*/*.yaml)"
 
-          # Assert the shape, not just non-emptiness: a malformed read (a separator, a
-          # `null`, a yq error) must fail loudly instead of being compared as a version.
-          if [[ ! "${floor}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::could not read a version floor from policies.kyverno.io/minversion (got '${floor}')" >&2
+          if [[ -z "${declared}" ]]; then
+            echo "::error::no policy declares a policies.kyverno.io/minversion annotation" >&2
             exit 1
           fi
+
+          # Validate EVERY declared floor, not just the maximum: a malformed or empty
+          # annotation sorts below a valid one and would otherwise never be looked at,
+          # leaving the guard silently fail-open for that policy.
+          while IFS= read -r value; do
+            if [[ ! "${value}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::policies.kyverno.io/minversion must be a semver version (got '${value}')" >&2
+              exit 1
+            fi
+          done <<< "${declared}"
+
+          floor="$(printf '%s\n' "${declared}" | sort -V | tail -n 1)"
 
           if [[ "$(printf '%s\n%s\n' "${floor}" "${installed}" | sort -V | head -n 1)" != "${floor}" ]]; then
             echo "::error::pinned Kyverno CLI ${installed} is below the catalog floor ${floor}" >&2
