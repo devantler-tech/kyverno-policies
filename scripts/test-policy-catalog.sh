@@ -480,30 +480,11 @@ if [[ "${rule_count}" -eq 0 || "${synchronized_rule_count}" -ne "${rule_count}" 
   exit 1
 fi
 
-kyverno test "${repo_root}/tests/auto-vpa" \
-  --require-tests \
-  --detailed-results \
-  --remove-color
-
-kyverno test "${repo_root}/tests/enforce-flux-best-practices" \
-  --require-tests \
-  --detailed-results \
-  --remove-color
-
-kyverno test "${repo_root}/tests/helm-release-enable-tests" \
-  --require-tests \
-  --detailed-results \
-  --remove-color
-
-kyverno test "${repo_root}/tests/helm-release-install-crds" \
-  --require-tests \
-  --detailed-results \
-  --remove-color
-
-kyverno test "${repo_root}/tests/helm-release-remediation-retries" \
-  --require-tests \
-  --detailed-results \
-  --remove-color
+# Declarative behavior specs (tests/*/kyverno-test.yaml) are NOT run here: CI runs
+# `kyverno test .` from the repo root, which discovers every fixture recursively.
+# Listing fixture paths here instead meant a new policy's fixture was silently never
+# executed until someone remembered to add it below. This script now asserts only the
+# structural invariants that `kyverno test` cannot express.
 
 output_dir="$(mktemp -d)"
 trap 'rm -rf "${output_dir}"' EXIT

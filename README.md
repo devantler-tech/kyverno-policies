@@ -73,12 +73,16 @@ Important operating constraints:
 ```sh
 yamllint .
 kubectl kustomize . > /dev/null
+kyverno test . --require-tests --detailed-results --remove-color
 bash scripts/test-policy-catalog.sh
 shellcheck scripts/test-policy-catalog.sh
 actionlint .github/workflows/ci.yaml
 zizmor .github/workflows/ci.yaml
 git diff --check
 ```
+
+`kyverno test .` runs every policy's declarative behavior fixture, discovered recursively;
+`test-policy-catalog.sh` asserts the structural invariants those fixtures cannot express.
 
 The generated-resource fixtures assert the exact VPA target, update mode, controlled resources, and
 bounds for each workload kind. An unmatched Job assertion verifies the policy does not generate outside
