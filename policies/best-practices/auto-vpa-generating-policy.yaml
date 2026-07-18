@@ -10,6 +10,15 @@
 # Split into one policy per workload kind, mirroring the classic policy's three rules:
 # GeneratingPolicy applies spec.matchConstraints to the whole policy, so three kinds with
 # three different VPA bodies cannot share one policy without branching inside CEL.
+#
+# ⚠️ KNOWN 1.18.x LIMITATION — generateExisting parity needs Kyverno >= 1.19. The
+# spec.evaluation.generateExisting field is accepted by the 1.18 schema but the behaviour
+# does not fire for PRE-EXISTING triggers (kyverno/kyverno#15722, a regression vs the
+# classic rule; fixed by kyverno/kyverno#16041, milestone 1.19.0, NOT backported to any
+# 1.18.x release as of 1.18.2). On 1.18.x an existing workload only gets its VPA on its
+# next CREATE/UPDATE admission. ADOPTION GATE: registering this port as the catalog's
+# auto-vpa form with full classic parity requires the consumer to run Kyverno >= 1.19;
+# until then the classic policy remains the registered form.
 apiVersion: policies.kyverno.io/v1
 kind: GeneratingPolicy
 metadata:
