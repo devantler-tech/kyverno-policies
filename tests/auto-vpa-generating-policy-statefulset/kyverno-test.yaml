@@ -1,0 +1,26 @@
+---
+# Parity spec for the StatefulSet arm of the GeneratingPolicy port of auto-vpa.
+#
+# Split one Test per policy because GeneratingPolicy has no named rules: kyverno expands
+# every results[] entry across every resource in the Test, and neither a per-result
+# `resources` list nor `kind` narrows that, so a single Test carrying all three kinds
+# reports six spurious cross-kind failures.
+#
+# The expected output is ../auto-vpa/generated-statefulset-vpa.yaml — the SAME fixture the
+# classic policy is held to. That shared expectation is the parity claim; an expectation
+# authored next to the new policy could drift with it and prove nothing.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: auto-vpa-generating-policy-statefulset-matches-classic-output
+policies:
+  - ../../policies/best-practices/auto-vpa-generating-policy.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: auto-vpa-statefulset
+    resources:
+      - test/shared
+    generatedResource: ../auto-vpa/generated-statefulset-vpa.yaml
+    kind: StatefulSet
+    result: pass

@@ -1,0 +1,21 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # Same name as the StatefulSet and DaemonSet below: the collision this policy
+  # guards against — three kinds legally sharing one name in one namespace.
+  name: shared
+  namespace: test
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: registry.k8s.io/pause:3.10
