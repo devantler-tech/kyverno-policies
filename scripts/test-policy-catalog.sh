@@ -33,6 +33,16 @@ if [[ ! -f "${image_tag_policy}" ]]; then
   exit 1
 fi
 
+# Scope of this script (see #31): structural invariants only. A shape assertion belongs here
+# ONLY if the declarative fixtures cannot catch the corresponding behaviour change. That is
+# decided by mutation-testing the policy, never by inspection — 6 of 17 mutations that "look"
+# fixture-covered are not, because `kyverno test` scores a non-matching row as `Excluded` and
+# `Excluded` counts as a PASS.
+#
+# Most importantly (#32): deleting or renaming a rule leaves the whole fixture suite GREEN — a
+# `result: fail` expectation is satisfied by the rule not existing. The rule-name and rule-count
+# assertions below are therefore the ONLY guard against rule removal. Do not remove them as
+# "duplicates" of the fixtures.
 assert_equal "$(yq '.apiVersion' "${image_tag_policy}")" "kyverno.io/v1" \
   "shared image-tag policy must use kyverno.io/v1"
 assert_equal "$(yq '.kind' "${image_tag_policy}")" "ClusterPolicy" \
@@ -118,9 +128,6 @@ assert_equal "$(yq '.spec.rules[0].exclude.any | length' "${recommended_labels_p
 assert_equal "$(yq '.spec.rules[0].exclude.any[0].resources | keys | join(",")' \
   "${recommended_labels_policy}")" "namespaces" \
   "shared recommended-label policy must exclude only by namespace"
-assert_equal "$(yq '.spec.rules[0].exclude.any[0].resources.namespaces | sort | join(",")' \
-  "${recommended_labels_policy}")" "kube-node-lease,kube-public,kube-system" \
-  "shared recommended-label policy must preserve the three Kubernetes system namespaces"
 assert_equal "$(yq '.spec.rules[0].preconditions | keys | join(",")' \
   "${recommended_labels_policy}")" "all" \
   "shared recommended-label policy must require every label-safety precondition"
@@ -133,45 +140,15 @@ assert_equal "$(yq '.spec.rules[0].preconditions.all[0] | keys | sort | join(","
 assert_equal "$(yq '.spec.rules[0].preconditions.all[0].key' \
   "${recommended_labels_policy}")" "{{ request.object.metadata.name || '' }}" \
   "shared recommended-label policy must inspect the materialized workload name"
-assert_equal "$(yq '.spec.rules[0].preconditions.all[0].operator' \
-  "${recommended_labels_policy}")" "NotEquals" \
-  "shared recommended-label policy must skip generateName-only admission requests"
-assert_equal "$(yq '.spec.rules[0].preconditions.all[0].value' \
-  "${recommended_labels_policy}")" "" \
-  "shared recommended-label policy must require a non-empty workload name"
 assert_equal "$(yq '.spec.rules[0].preconditions.all[1] | keys | sort | join(",")' \
   "${recommended_labels_policy}")" "key,operator,value" \
   "shared recommended-label policy must keep the label-length precondition exact"
 assert_equal "$(yq '.spec.rules[0].preconditions.all[1].key' \
   "${recommended_labels_policy}")" "{{ length(request.object.metadata.name || '') }}" \
   "shared recommended-label policy must measure the workload name used as a label"
-assert_equal "$(yq '.spec.rules[0].preconditions.all[1].operator' \
-  "${recommended_labels_policy}")" "LessThanOrEquals" \
-  "shared recommended-label policy must reject names above the label-value limit"
-assert_equal "$(yq '.spec.rules[0].preconditions.all[1].value' \
-  "${recommended_labels_policy}")" "63" \
-  "shared recommended-label policy must enforce the Kubernetes label-value limit"
 assert_equal "$(yq '.spec.rules[0].mutate | keys | join(",")' \
   "${recommended_labels_policy}")" "patchStrategicMerge" \
   "shared recommended-label policy must use only a strategic-merge patch"
-assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge | keys | sort | join(",")' \
-  "${recommended_labels_policy}")" "metadata,spec" \
-  "shared recommended-label policy must mutate only workload and pod-template metadata"
-assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.metadata.labels | keys | sort | join(",")' \
-  "${recommended_labels_policy}")" "+(app),+(app.kubernetes.io/name)" \
-  "shared recommended-label policy must add both missing workload labels conditionally"
-assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.spec.template.metadata.labels | keys | join(",")' \
-  "${recommended_labels_policy}")" "+(app.kubernetes.io/name)" \
-  "shared recommended-label policy must add the missing pod-template name conditionally"
-assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.metadata.labels."+(app)"' \
-  "${recommended_labels_policy}")" "{{ request.object.metadata.name || '' }}" \
-  "shared recommended-label policy must derive app from the workload name"
-assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.metadata.labels."+(app.kubernetes.io/name)"' \
-  "${recommended_labels_policy}")" "{{ request.object.metadata.name || '' }}" \
-  "shared recommended-label policy must derive the workload name label from the workload name"
-assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.spec.template.metadata.labels."+(app.kubernetes.io/name)"' \
-  "${recommended_labels_policy}")" "{{ request.object.metadata.name || '' }}" \
-  "shared recommended-label policy must derive the pod-template name label from the workload name"
 assert_equal "$(yq '[.resources[] |
   select(. == "policies/best-practices/add-recommended-labels.yaml")
 ] | length' "${repo_root}/kustomization.yaml")" "1" \
