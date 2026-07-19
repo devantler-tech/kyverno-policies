@@ -598,10 +598,32 @@ fi
 # executed until someone remembered to add it below. This script now asserts only the
 # structural invariants that `kyverno test` cannot express.
 
+classic_positive_dir="$(mktemp -d)"
 output_dir="$(mktemp -d)"
 ported_positive_dir="$(mktemp -d)"
 ported_negative_dir="$(mktemp -d)"
-trap 'rm -rf "${output_dir}" "${ported_positive_dir}" "${ported_negative_dir}"' EXIT
+trap 'rm -rf "${classic_positive_dir}" "${output_dir}" "${ported_positive_dir}" "${ported_negative_dir}"' EXIT
+
+# Positive control FIRST: `kyverno apply` silently drops a policy it cannot
+# parse ("Applying 0 policy rule(s)", exit 0), so "no files generated for a
+# Job" alone passes vacuously when the policy never loaded. Proving the same
+# policy invocation generates for matched workloads is what gives the
+# unmatched-Job assertion below its teeth.
+kyverno apply "${policy}" \
+  --resource "${repo_root}/tests/auto-vpa/resources.yaml" \
+  --output "${classic_positive_dir}" \
+  --remove-color >/dev/null
+
+# The classic single-policy form writes every generated resource into one
+# file, so count VPA documents rather than files.
+classic_generated_count="$(
+  find "${classic_positive_dir}" -type f -exec grep -h '^kind: VerticalPodAutoscaler$' {} + | wc -l | tr -d ' '
+)"
+
+if [[ "${classic_generated_count}" -ne 3 ]]; then
+  echo "FAIL: auto-vpa must generate one VPA per matched workload kind (got ${classic_generated_count})" >&2
+  exit 1
+fi
 
 kyverno apply "${policy}" \
   --resource "${repo_root}/tests/auto-vpa/unmatched-job.yaml" \
