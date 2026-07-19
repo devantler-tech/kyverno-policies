@@ -21,12 +21,22 @@ env:
   # catalog without a single line of this repository changing.
   # Keep at or above the `policies.kyverno.io/minversion` floor the policies declare —
   # the "Verify Kyverno CLI" step below enforces that, so the two cannot drift apart.
-  # The annotation below lets Renovate propose bumps (.github/renovate.json); integrity
-  # of the downloaded asset is identity-verified with cosign against the upstream
-  # release workflow's Sigstore bundle, so a version bump needs no repo-side digest
-  # update and can merge through the normal automation path.
+  # The annotation below lets Renovate propose bumps (.github/renovate.json). A
+  # Renovate PR carries only the version, so it goes red on the digest check below —
+  # that red PR is the staleness SIGNAL; the delivered bump (version + digests,
+  # verified) ships on an agent-authored branch, since dependency-bot branches are
+  # hands-off (rationale on #16, incl. why an auto-mergeable path was rejected).
   # renovate: datasource=github-releases depName=kyverno/kyverno extractVersion=^v(?<version>.*)$
   KYVERNO_CLI_VERSION: "1.18.2"
+  # Digests are pinned HERE rather than taken from the release's own checksums.txt: a Git
+  # tag is mutable, so a checksum fetched alongside the asset it verifies would simply be
+  # replaced together with it. They are the IMMUTABLE anchor — the cosign identity check
+  # below proves who built the asset, but an upstream actor with repo write could re-tag
+  # and re-run the release workflow to mint the same identity for a replacement; only
+  # this repo-side digest detects that. Bump these with KYVERNO_CLI_VERSION, from the
+  # upstream checksums.txt of the new release.
+  KYVERNO_CLI_SHA256_ARM64: cc69bc6638da1993146c134943fac91cbc9dd0ce60a3e88c6d7c518ae00f1abc
+  KYVERNO_CLI_SHA256_X86_64: a461096a3111e6a4134c2bd135ddd8e0bfd9d466a5d5b17810b76a484fffdae4
 
 jobs:
   required:
@@ -51,8 +61,8 @@ jobs:
           set -Eeuo pipefail
 
           case "$(uname -m)" in
-            arm64) arch=arm64 ;;
-            x86_64) arch=x86_64 ;;
+            arm64) arch=arm64; expected="${KYVERNO_CLI_SHA256_ARM64}" ;;
+            x86_64) arch=x86_64; expected="${KYVERNO_CLI_SHA256_X86_64}" ;;
             *) echo "::error::unsupported runner architecture: $(uname -m)" >&2; exit 1 ;;
           esac
 
@@ -66,13 +76,16 @@ jobs:
             --pattern "${asset}.sigstore.json" \
             --dir "${workdir}"
 
-          # Identity-verify the asset against upstream's Sigstore bundle: the
-          # certificate is bound to kyverno/kyverno's release workflow at this exact
-          # version tag, so a re-pointed tag or replaced asset cannot carry a valid
-          # signature for that identity. Unlike a checksum fetched from the release,
-          # this does not trust tag immutability; unlike repo-pinned digests, a
-          # version bump needs no companion digest edit, so Renovate bumps stay
-          # mergeable through the normal automation path (#16).
+          # Layer 1 — immutable anchor: the repo-pinned digest (see env block; only
+          # this detects an upstream re-tag + re-release of the pinned version).
+          echo "${expected}  ${asset}" > "${workdir}/expected.sha256"
+          (cd "${workdir}" && shasum -a 256 -c expected.sha256)
+
+          # Layer 2 — provenance: identity-verify the asset against upstream's
+          # Sigstore bundle. The certificate is bound to kyverno/kyverno's release
+          # workflow at this exact version tag, so an asset swapped without upstream
+          # repo write (CDN/asset tampering) cannot carry a valid signature, and the
+          # digest above cannot have been minted by anything but that workflow.
           release_identity="https://github.com/kyverno/kyverno/.github/workflows/release.yaml"
           cosign verify-blob \
             --bundle "${workdir}/${asset}.sigstore.json" \
