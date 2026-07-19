@@ -26,12 +26,17 @@ assert_equal() {
 # ---------------------------------------------------------------------------------------------
 # WHY THIS SCRIPT IS NOT REDUNDANT WITH tests/*/kyverno-test.yaml  (see #31, #32)
 #
-# The shape assertions below look like duplicates of the declarative fixtures. They are not, and an
-# attempt to delete them measured exactly how not: of 17 assertions mutation-tested, 16 turned out
-# to be the ONLY thing catching their behaviour change. Do not repeat that refactor without
-# re-running the measurement — inspection gives the wrong answer with high confidence.
+# The shape assertions below look like duplicates of the declarative fixtures. They are not. Three
+# successive attempts to delete them were each refuted by measurement, and the reason is structural:
+# the unit of coverage is the MUTATION, not the assertion. One assertion typically constrains
+# several mutations at once — some the fixtures also catch, some nothing else catches — so no
+# assertion owns a single behaviour change, and "how many of these are redundant?" has no answer at
+# the per-assertion level. The tables below are a map of MUTATIONS to coverage; read them that way
+# and see the per-mutation section at the end. Do not repeat this refactor without re-running the
+# measurement — inspection gives the wrong answer with high confidence.
 #
-# SCOPE OF THE MEASUREMENT. Those 17 are all in the `add-recommended-labels` section. This file has
+# SCOPE OF THE MEASUREMENT. 17 mutations were measured, all against the `add-recommended-labels`
+# section. This file has
 # 78 assertions in total; the image-tag, Flux/Helm and auto-VPA checks were NOT mutation-tested, so
 # they are neither proven load-bearing nor proven redundant. Measure before touching them.
 # All figures below were measured with the repo-pinned Kyverno CLI **1.18.2**
