@@ -150,3 +150,63 @@ spec:
       containers:
         - name: app
           image: registry.example/team/job:v1
+---
+# Excluded namespace: kube-public. The policy excludes three system namespaces;
+# without a resource in each, only the kube-system arm is actually exercised.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: public-deployment
+  namespace: kube-public
+spec:
+  selector:
+    matchLabels:
+      workload: public-deployment
+  template:
+    metadata:
+      labels:
+        workload: public-deployment
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+# Excluded namespace: kube-node-lease.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lease-deployment
+  namespace: kube-node-lease
+spec:
+  selector:
+    matchLabels:
+      workload: lease-deployment
+  template:
+    metadata:
+      labels:
+        workload: lease-deployment
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+# Accept side of the 63-character label-length boundary. The 64-character
+# resource above proves the reject side; without this one, lowering the
+# precondition's limit would not fail any test.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      workload: boundary
+  template:
+    metadata:
+      labels:
+        workload: boundary
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
