@@ -84,6 +84,42 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      workload: long-name
+  template:
+    metadata:
+      labels:
+        workload: long-name
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  generateName: generated-workload-
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      workload: generated-workload
+  template:
+    metadata:
+      labels:
+        workload: generated-workload
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
   name: system-deployment
   namespace: kube-system
 spec:

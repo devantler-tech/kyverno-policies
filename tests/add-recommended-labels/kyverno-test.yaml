@@ -20,6 +20,8 @@ results:
     rule: add-workload-labels
     resources:
       - apps/authored-deployment
+      - apps/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - apps/
       - kube-system/system-deployment
       - apps/nonmatching-job
     result: skip

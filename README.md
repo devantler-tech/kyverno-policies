@@ -48,8 +48,10 @@ anchors leave every explicitly authored value unchanged.
 
 The policy excludes `kube-system`, `kube-public`, and `kube-node-lease`. It runs on create and update
 admission only, so existing workloads receive missing labels on their next admitted update. Kyverno's
-global admission filters still win, and consumer-specific exclusions or rollout choices remain in the
-consumer repository.
+global admission filters still win. A `generateName`-only create is skipped until the API server assigns
+the workload name, then a later update can add the labels. Names longer than the 63-character Kubernetes
+label-value limit are also skipped rather than turning an otherwise valid workload into an invalid
+admission. Consumer-specific exclusions or rollout choices remain in the consumer repository.
 
 ## Auto VPA behavior
 
