@@ -33,16 +33,29 @@ if [[ ! -f "${image_tag_policy}" ]]; then
   exit 1
 fi
 
-# Scope of this script (see #31): structural invariants only. A shape assertion belongs here
-# ONLY if the declarative fixtures cannot catch the corresponding behaviour change. That is
-# decided by mutation-testing the policy, never by inspection — 6 of 17 mutations that "look"
-# fixture-covered are not, because `kyverno test` scores a non-matching row as `Excluded` and
-# `Excluded` counts as a PASS.
+# Scope of this script (see #31): structural invariants only. A shape assertion belongs here ONLY
+# if the declarative fixtures cannot catch the corresponding behaviour change — decided by
+# mutation-testing the policy, never by inspection.
 #
-# Most importantly (#32): deleting or renaming a rule leaves the whole fixture suite GREEN — a
-# `result: fail` expectation is satisfied by the rule not existing. The rule-name and rule-count
-# assertions below are therefore the ONLY guard against rule removal. Do not remove them as
-# "duplicates" of the fixtures.
+# Mutate in THREE directions, not one. A subtractive-only sweep is what makes a key-set closure
+# assertion look redundant, and it is exactly wrong:
+#   1. SUBTRACTIVE  — remove/weaken the thing (drop a namespace, drop a label key).
+#   2. ADDITIVE     — ADD something the fixtures do not cover. No fixture exists for a namespace
+#                     outside the exclusion list, and every pass fixture already carries a
+#                     `workload` label, so adding either changes NO fixture result. The
+#                     `keys | sort | join(",")` assertions exist for precisely this direction.
+#   3. COMPENSATING — a pair of changes that preserves every current fixture result while moving
+#                     behaviour outside the fixtures' range. `LessThanOrEquals 63` -> `NotEquals 64`
+#                     is identical at 63 and 64 (the only two lengths any fixture pins) yet lets
+#                     65+ through. Boundary fixtures cannot see this; the exact operator/value can.
+#
+# And (#32) the fixtures are blind to rule identity outright: deleting or renaming a rule leaves the
+# whole suite GREEN, because `kyverno test` scores a non-matching row `Excluded` and `Excluded`
+# counts as a PASS — a `result: fail` expectation is satisfied by the rule not existing. The
+# rule-name and rule-count assertions below are the ONLY guard against rule removal.
+#
+# Do not remove any assertion below as a "duplicate" of the fixtures without running all three
+# mutation directions against it first.
 assert_equal "$(yq '.apiVersion' "${image_tag_policy}")" "kyverno.io/v1" \
   "shared image-tag policy must use kyverno.io/v1"
 assert_equal "$(yq '.kind' "${image_tag_policy}")" "ClusterPolicy" \
@@ -128,6 +141,11 @@ assert_equal "$(yq '.spec.rules[0].exclude.any | length' "${recommended_labels_p
 assert_equal "$(yq '.spec.rules[0].exclude.any[0].resources | keys | join(",")' \
   "${recommended_labels_policy}")" "namespaces" \
   "shared recommended-label policy must exclude only by namespace"
+# ADDITIVE guard: no fixture exists for a namespace that is not already in this list, so ADDING
+# one (e.g. "monitoring") changes no fixture result while silently un-labelling that namespace.
+assert_equal "$(yq '.spec.rules[0].exclude.any[0].resources.namespaces | sort | join(",")' \
+  "${recommended_labels_policy}")" "kube-node-lease,kube-public,kube-system" \
+  "shared recommended-label policy must preserve the three Kubernetes system namespaces"
 assert_equal "$(yq '.spec.rules[0].preconditions | keys | join(",")' \
   "${recommended_labels_policy}")" "all" \
   "shared recommended-label policy must require every label-safety precondition"
@@ -146,9 +164,28 @@ assert_equal "$(yq '.spec.rules[0].preconditions.all[1] | keys | sort | join(","
 assert_equal "$(yq '.spec.rules[0].preconditions.all[1].key' \
   "${recommended_labels_policy}")" "{{ length(request.object.metadata.name || '') }}" \
   "shared recommended-label policy must measure the workload name used as a label"
+# COMPENSATING guard: the two boundary fixtures (63 accept, 64 reject) are jointly satisfied by
+# `NotEquals 64` as well as by `LessThanOrEquals 63` — identical results at 63 and 64, but names of
+# 65+ would then be mutated into invalid label values instead of skipped. Only pinning the exact
+# operator and value rules that out; the fixtures provably cannot.
+assert_equal "$(yq '.spec.rules[0].preconditions.all[1].operator' \
+  "${recommended_labels_policy}")" "LessThanOrEquals" \
+  "shared recommended-label policy must reject names above the label-value limit"
+assert_equal "$(yq '.spec.rules[0].preconditions.all[1].value' \
+  "${recommended_labels_policy}")" "63" \
+  "shared recommended-label policy must enforce the Kubernetes label-value limit"
 assert_equal "$(yq '.spec.rules[0].mutate | keys | join(",")' \
   "${recommended_labels_policy}")" "patchStrategicMerge" \
   "shared recommended-label policy must use only a strategic-merge patch"
+# ADDITIVE guards: every pass fixture already carries a `workload` label on both the workload and
+# its pod template, so ADDING `+(workload)` to either patch produces no fixture diff while making
+# the policy write a label the README contract does not allow it to write.
+assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.metadata.labels | keys | sort | join(",")' \
+  "${recommended_labels_policy}")" "+(app),+(app.kubernetes.io/name)" \
+  "shared recommended-label policy must add both missing workload labels conditionally"
+assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.spec.template.metadata.labels | keys | join(",")' \
+  "${recommended_labels_policy}")" "+(app.kubernetes.io/name)" \
+  "shared recommended-label policy must add the missing pod-template name conditionally"
 assert_equal "$(yq '[.resources[] |
   select(. == "policies/best-practices/add-recommended-labels.yaml")
 ] | length' "${repo_root}/kustomization.yaml")" "1" \
