@@ -31,6 +31,10 @@ assert_equal() {
 # to be the ONLY thing catching their behaviour change. Do not repeat that refactor without
 # re-running the measurement — inspection gives the wrong answer with high confidence.
 #
+# SCOPE OF THE MEASUREMENT. Those 17 are all in the `add-recommended-labels` section. This file has
+# 78 assertions in total; the image-tag, Flux/Helm and auto-VPA checks were NOT mutation-tested, so
+# they are neither proven load-bearing nor proven redundant. Measure before touching them.
+#
 # The fixtures are weaker than they look, in three ways:
 #
 #   1. RULE IDENTITY IS UNENFORCED (#32). Deleting or renaming a rule leaves the whole fixture suite
@@ -38,22 +42,29 @@ assert_equal() {
 #      so a `result: fail` expectation is satisfied by the rule not existing. The rule-name and
 #      rule-count assertions are the only guard against a rule silently disappearing.
 #
-#   2. FIXTURES CANNOT SEE ADDITIONS. Nothing covers a namespace outside the exclusion list, and
-#      every pass fixture already carries a `workload` label — so ADDING `monitoring` to the
-#      exclusions, or `+(workload)` to either patch, changes no fixture result at all. The
-#      `keys | sort | join(",")` closure assertions exist for precisely this direction.
+#   2. FIXTURES CANNOT SEE SOME ADDITIONS — but which ones depends on the patch location, so measure
+#      rather than assume. Both of these leave the suite fully green (127 pass / 0 fail):
+#        - adding `monitoring` to the namespace exclusions (no fixture resource lives outside the
+#          namespaces already listed)
+#        - adding `+(workload)` to the POD-TEMPLATE patch — every fixture's pod template already
+#          carries a `workload` label, so the add-anchor is a no-op on every one of them
+#      The same addition on the WORKLOAD-METADATA patch IS caught (5 failures): no fixture carries
+#      `metadata.labels.workload` at workload level, so the anchor really adds a label there. The
+#      `keys | sort | join(",")` closure assertions exist for the blind direction.
 #
 #   3. FIXTURES CANNOT SEE COMPENSATING PAIRS — changes that preserve every fixture result while
-#      moving behaviour outside the range the fixtures pin. All four measured:
+#      moving behaviour outside the range the fixtures pin. Three measured, all undetected:
 #        - `LessThanOrEquals 63` -> `NotEquals 64`  (identical at 63 and 64; lets 65+ be mutated
 #          into invalid label values)
 #        - `NotEquals ""` -> `NotIn ["", "blocked"]` (silently excludes a valid workload)
 #        - a label value of `generateName || name || ''` (named fixtures omit `generateName`, the
 #          generateName-only fixture is skipped, so an UPDATE carrying both writes the prefix)
+#      Note the shape: mutating a precondition's VALUE alone (`NotEquals "zzz"`) IS caught; these
+#      change OPERATOR AND VALUE TOGETHER. A mutation is only as good as the joint space it explores.
 #
 # So: mutate in THREE directions — subtractive, additive, and compensating — and delete an assertion
-# only when the fixtures ALONE go red. One assertion in this file has passed that bar; the rest have
-# not. Strengthening the fixtures (#32) is the way to shrink this script, not deleting from it.
+# only when the fixtures ALONE go red. Of the 17 measured, one has passed that bar and 16 have not.
+# Strengthening the fixtures (#32) is the way to shrink this script, not deleting from it.
 # ---------------------------------------------------------------------------------------------
 
 if [[ ! -f "${policy}" ]]; then
