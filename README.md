@@ -11,6 +11,7 @@ change.
 
 | Policy | Behavior | Prerequisites |
 |---|---|---|
+| [`add-recommended-labels`](policies/best-practices/add-recommended-labels.yaml) | Adds missing Kubernetes identity labels to Deployments, StatefulSets, and DaemonSets without replacing authored values | Kyverno 1.18+ and admission processing that includes the target workload |
 | [`auto-vpa`](policies/best-practices/auto-vpa.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.18+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
 | [`disallow-latest-tag`](policies/best-practices/disallow-latest-tag.yaml) | Audits Pod images that omit a tag or use the mutable `:latest` tag | Kyverno 1.18+ and admission/background processing that includes Pods |
 | [`enforce-flux-best-practices`](policies/flux/enforce-flux-best-practices.yaml) | Validates reliability settings on Flux Kustomizations and HelmReleases | Kyverno 1.18+ and the Flux Kustomization v1 and HelmRelease v2 CRDs |
@@ -37,6 +38,20 @@ digest-only references, fail; `:latest` references fail even when paired with a 
 The shared policy deliberately contains no namespace exclusions. Consumers own any environment-specific
 exceptions and the separately validated decision to promote either rule beyond `Audit`. Kyverno's global
 resource filters still win, so a filtered Pod remains unreachable by this policy.
+
+## Recommended label behavior
+
+`add-recommended-labels` fills only missing identity labels on Deployments, StatefulSets, and DaemonSets.
+It sets `app` and `app.kubernetes.io/name` on workload metadata and
+`app.kubernetes.io/name` on the pod template, using the workload name for each added value. Conditional
+anchors leave every explicitly authored value unchanged.
+
+The policy excludes `kube-system`, `kube-public`, and `kube-node-lease`. It runs on create and update
+admission only, so existing workloads receive missing labels on their next admitted update. Kyverno's
+global admission filters still win. A `generateName`-only create is skipped until the API server assigns
+the workload name, then a later update can add the labels. Names longer than the 63-character Kubernetes
+label-value limit are also skipped rather than turning an otherwise valid workload into an invalid
+admission. Consumer-specific exclusions or rollout choices remain in the consumer repository.
 
 ## Auto VPA behavior
 

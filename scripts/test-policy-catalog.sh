@@ -5,6 +5,8 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 policy="${repo_root}/policies/best-practices/auto-vpa.yaml"
 image_tag_policy="${repo_root}/policies/best-practices/disallow-latest-tag.yaml"
+recommended_labels_policy="${repo_root}/policies/best-practices/add-recommended-labels.yaml"
+recommended_labels_test="${repo_root}/tests/add-recommended-labels/kyverno-test.yaml"
 flux_policy="${repo_root}/policies/flux/enforce-flux-best-practices.yaml"
 helm_crds_policy="${repo_root}/policies/flux/helm-release-install-crds.yaml"
 helm_test_policy="${repo_root}/policies/flux/helm-release-enable-tests.yaml"
@@ -69,6 +71,116 @@ if ! grep -Fq \
   'policies/best-practices/disallow-latest-tag.yaml' \
   "${repo_root}/README.md"; then
   echo "FAIL: README catalog is missing disallow-latest-tag" >&2
+  exit 1
+fi
+
+if [[ ! -f "${recommended_labels_policy}" ]]; then
+  echo "FAIL: shared catalog is missing policies/best-practices/add-recommended-labels.yaml" >&2
+  exit 1
+fi
+
+if [[ ! -f "${recommended_labels_test}" ]]; then
+  echo "FAIL: shared recommended-label policy is missing its behavior contract" >&2
+  exit 1
+fi
+
+assert_equal "$(yq '.apiVersion' "${recommended_labels_policy}")" "kyverno.io/v1" \
+  "shared recommended-label policy must use kyverno.io/v1"
+assert_equal "$(yq '.kind' "${recommended_labels_policy}")" "ClusterPolicy" \
+  "shared recommended-label policy must use ClusterPolicy"
+assert_equal "$(yq '.metadata.name' "${recommended_labels_policy}")" \
+  "add-recommended-labels" \
+  "shared recommended-label policy must use its catalog identity"
+assert_equal "$(yq '.metadata.annotations."policies.kyverno.io/minversion"' \
+  "${recommended_labels_policy}")" "1.18.0" \
+  "shared recommended-label policy must declare the catalog Kyverno floor"
+assert_equal "$(yq '.spec.background' "${recommended_labels_policy}")" "false" \
+  "shared recommended-label policy must be admission-only"
+assert_equal "$(yq '.spec.rules | length' "${recommended_labels_policy}")" "1" \
+  "shared recommended-label policy must expose one mutation rule"
+assert_equal "$(yq '.spec.rules[0].name' "${recommended_labels_policy}")" \
+  "add-workload-labels" \
+  "shared recommended-label policy must use the documented rule identity"
+assert_equal "$(yq '.spec.rules[0] | keys | sort | join(",")' \
+  "${recommended_labels_policy}")" "exclude,match,mutate,name,preconditions" \
+  "shared recommended-label policy must contain only its match, boundary, preconditions, and mutation"
+assert_equal "$(yq '.spec.rules[0].match.any | length' "${recommended_labels_policy}")" "1" \
+  "shared recommended-label policy must expose one match branch"
+assert_equal "$(yq '.spec.rules[0].match.any[0].resources | keys | join(",")' \
+  "${recommended_labels_policy}")" "kinds" \
+  "shared recommended-label policy must match only by kind"
+assert_equal "$(yq '.spec.rules[0].match.any[0].resources.kinds | sort | join(",")' \
+  "${recommended_labels_policy}")" \
+  "apps/v1/DaemonSet,apps/v1/Deployment,apps/v1/StatefulSet" \
+  "shared recommended-label policy must match exactly the three built-in workload APIs"
+assert_equal "$(yq '.spec.rules[0].exclude.any | length' "${recommended_labels_policy}")" "1" \
+  "shared recommended-label policy must expose one system-namespace boundary"
+assert_equal "$(yq '.spec.rules[0].exclude.any[0].resources | keys | join(",")' \
+  "${recommended_labels_policy}")" "namespaces" \
+  "shared recommended-label policy must exclude only by namespace"
+assert_equal "$(yq '.spec.rules[0].exclude.any[0].resources.namespaces | sort | join(",")' \
+  "${recommended_labels_policy}")" "kube-node-lease,kube-public,kube-system" \
+  "shared recommended-label policy must preserve the three Kubernetes system namespaces"
+assert_equal "$(yq '.spec.rules[0].preconditions | keys | join(",")' \
+  "${recommended_labels_policy}")" "all" \
+  "shared recommended-label policy must require every label-safety precondition"
+assert_equal "$(yq '.spec.rules[0].preconditions.all | length' \
+  "${recommended_labels_policy}")" "2" \
+  "shared recommended-label policy must require a materialized label-safe name"
+assert_equal "$(yq '.spec.rules[0].preconditions.all[0] | keys | sort | join(",")' \
+  "${recommended_labels_policy}")" "key,operator,value" \
+  "shared recommended-label policy must keep the name-presence precondition exact"
+assert_equal "$(yq '.spec.rules[0].preconditions.all[0].key' \
+  "${recommended_labels_policy}")" "{{ request.object.metadata.name || '' }}" \
+  "shared recommended-label policy must inspect the materialized workload name"
+assert_equal "$(yq '.spec.rules[0].preconditions.all[0].operator' \
+  "${recommended_labels_policy}")" "NotEquals" \
+  "shared recommended-label policy must skip generateName-only admission requests"
+assert_equal "$(yq '.spec.rules[0].preconditions.all[0].value' \
+  "${recommended_labels_policy}")" "" \
+  "shared recommended-label policy must require a non-empty workload name"
+assert_equal "$(yq '.spec.rules[0].preconditions.all[1] | keys | sort | join(",")' \
+  "${recommended_labels_policy}")" "key,operator,value" \
+  "shared recommended-label policy must keep the label-length precondition exact"
+assert_equal "$(yq '.spec.rules[0].preconditions.all[1].key' \
+  "${recommended_labels_policy}")" "{{ length(request.object.metadata.name || '') }}" \
+  "shared recommended-label policy must measure the workload name used as a label"
+assert_equal "$(yq '.spec.rules[0].preconditions.all[1].operator' \
+  "${recommended_labels_policy}")" "LessThanOrEquals" \
+  "shared recommended-label policy must reject names above the label-value limit"
+assert_equal "$(yq '.spec.rules[0].preconditions.all[1].value' \
+  "${recommended_labels_policy}")" "63" \
+  "shared recommended-label policy must enforce the Kubernetes label-value limit"
+assert_equal "$(yq '.spec.rules[0].mutate | keys | join(",")' \
+  "${recommended_labels_policy}")" "patchStrategicMerge" \
+  "shared recommended-label policy must use only a strategic-merge patch"
+assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge | keys | sort | join(",")' \
+  "${recommended_labels_policy}")" "metadata,spec" \
+  "shared recommended-label policy must mutate only workload and pod-template metadata"
+assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.metadata.labels | keys | sort | join(",")' \
+  "${recommended_labels_policy}")" "+(app),+(app.kubernetes.io/name)" \
+  "shared recommended-label policy must add both missing workload labels conditionally"
+assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.spec.template.metadata.labels | keys | join(",")' \
+  "${recommended_labels_policy}")" "+(app.kubernetes.io/name)" \
+  "shared recommended-label policy must add the missing pod-template name conditionally"
+assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.metadata.labels."+(app)"' \
+  "${recommended_labels_policy}")" "{{ request.object.metadata.name || '' }}" \
+  "shared recommended-label policy must derive app from the workload name"
+assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.metadata.labels."+(app.kubernetes.io/name)"' \
+  "${recommended_labels_policy}")" "{{ request.object.metadata.name || '' }}" \
+  "shared recommended-label policy must derive the workload name label from the workload name"
+assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.spec.template.metadata.labels."+(app.kubernetes.io/name)"' \
+  "${recommended_labels_policy}")" "{{ request.object.metadata.name || '' }}" \
+  "shared recommended-label policy must derive the pod-template name label from the workload name"
+assert_equal "$(yq '[.resources[] |
+  select(. == "policies/best-practices/add-recommended-labels.yaml")
+] | length' "${repo_root}/kustomization.yaml")" "1" \
+  "shared recommended-label policy must be registered exactly once"
+
+if ! grep -Fq \
+  'policies/best-practices/add-recommended-labels.yaml' \
+  "${repo_root}/README.md"; then
+  echo "FAIL: README catalog is missing add-recommended-labels" >&2
   exit 1
 fi
 

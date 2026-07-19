@@ -1,0 +1,152 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unlabelled-deployment
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      workload: unlabelled-deployment
+  template:
+    metadata:
+      labels:
+        workload: unlabelled-deployment
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: authored-statefulset
+  namespace: apps
+  labels:
+    app: authored-app
+    app.kubernetes.io/name: authored-workload-name
+spec:
+  serviceName: authored-statefulset
+  selector:
+    matchLabels:
+      workload: authored-statefulset
+  template:
+    metadata:
+      labels:
+        workload: authored-statefulset
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: partial-daemonset
+  namespace: apps
+  labels:
+    app: authored-daemon-app
+spec:
+  selector:
+    matchLabels:
+      workload: partial-daemonset
+  template:
+    metadata:
+      labels:
+        workload: partial-daemonset
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authored-deployment
+  namespace: apps
+  labels:
+    app: authored-app
+    app.kubernetes.io/name: authored-workload-name
+spec:
+  selector:
+    matchLabels:
+      workload: authored-deployment
+  template:
+    metadata:
+      labels:
+        workload: authored-deployment
+        app.kubernetes.io/name: authored-pod-name
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      workload: long-name
+  template:
+    metadata:
+      labels:
+        workload: long-name
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  generateName: generated-workload-
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      workload: generated-workload
+  template:
+    metadata:
+      labels:
+        workload: generated-workload
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: system-deployment
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      workload: system-deployment
+  template:
+    metadata:
+      labels:
+        workload: system-deployment
+    spec:
+      containers:
+        - name: app
+          image: registry.example/system/app:v1
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nonmatching-job
+  namespace: apps
+spec:
+  template:
+    metadata:
+      labels:
+        workload: nonmatching-job
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: app
+          image: registry.example/team/job:v1
