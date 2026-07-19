@@ -14,6 +14,8 @@ results:
       - apps/unlabelled-deployment
       - apps/authored-statefulset
       - apps/partial-daemonset
+      # Accept side of the 63-character name boundary.
+      - apps/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     patchedResources: patched-resources.yaml
     result: pass
   - policy: add-recommended-labels
@@ -23,5 +25,8 @@ results:
       - apps/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       - apps/
       - kube-system/system-deployment
+      # The other two excluded system namespaces, previously unexercised.
+      - kube-public/public-deployment
+      - kube-node-lease/lease-deployment
       - apps/nonmatching-job
     result: skip

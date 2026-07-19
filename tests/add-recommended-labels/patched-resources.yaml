@@ -65,3 +65,25 @@ spec:
       containers:
         - name: app
           image: registry.example/team/app:v1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  namespace: apps
+  labels:
+    app: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    app.kubernetes.io/name: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+spec:
+  selector:
+    matchLabels:
+      workload: boundary
+  template:
+    metadata:
+      labels:
+        workload: boundary
+        app.kubernetes.io/name: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
