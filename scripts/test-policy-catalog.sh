@@ -23,6 +23,84 @@ assert_equal() {
   fi
 }
 
+# ---------------------------------------------------------------------------------------------
+# WHY THIS SCRIPT IS NOT REDUNDANT WITH tests/*/kyverno-test.yaml  (see #31, #32)
+#
+# The shape assertions below look like duplicates of the declarative fixtures. They are not. Three
+# successive attempts to delete them were each refuted by measurement, and the reason is structural:
+# the unit of coverage is the MUTATION, not the assertion. One assertion typically constrains
+# several mutations at once — some the fixtures also catch, some nothing else catches — so no
+# assertion owns a single behaviour change, and "how many of these are redundant?" has no answer at
+# the per-assertion level. The tables below are a map of MUTATIONS to coverage; read them that way
+# and see the per-mutation section at the end. Do not repeat this refactor without re-running the
+# measurement — inspection gives the wrong answer with high confidence.
+#
+# SCOPE OF THE MEASUREMENT. 17 mutations were measured, all against the `add-recommended-labels`
+# section. This file has
+# 78 assertions in total; the image-tag, Flux/Helm and auto-VPA checks were NOT mutation-tested, so
+# they are neither proven load-bearing nor proven redundant. Measure before touching them.
+# All figures below were measured with the repo-pinned Kyverno CLI **1.18.2**
+# (`KYVERNO_CLI_VERSION`). They depend on CLI evaluator behaviour — notably how `Excluded` rows are
+# scored — so re-measure after any CLI bump rather than trusting these numbers.
+#
+# The fixtures are weaker than they look, in three ways:
+#
+#   1. RULE IDENTITY IS UNENFORCED FOR A RENAME (#32). Renaming the rule leaves the fixture suite
+#      fully GREEN (127/0). Mechanism, as actually observed: when no rule matches the fixture's
+#      `rule:` key, EVERY row reports `Excluded`, and `Excluded` satisfies both expectation types
+#      this fixture uses — `result: pass` (4 rows) and `result: skip` (7 rows). Critically, the
+#      `pass` rows carry `patchedResources`, and that comparison is simply never performed once the
+#      row is Excluded, so the mutation's whole point goes unchecked. (This fixture has no
+#      `result: fail` rows at all — an earlier draft of this comment wrongly explained the blindness
+#      that way.) The rule-NAME assertion is the only guard against a silent rename.
+#      Deletion is a different story, and the earlier draft of this comment got it wrong: deleting
+#      this policy's SOLE rule does turn the fixtures red (116/11). #32's fail-open applies where a
+#      policy keeps other rules — the surviving rules keep it loadable while the deleted rule's
+#      fixture rows silently downgrade to `Excluded`. The rule-count assertion also fires here, so
+#      it is a second guard against disappearance, not the only one.
+#
+#   2. FIXTURES CANNOT SEE SOME ADDITIONS — but which ones depends on the patch location, so measure
+#      rather than assume. Both of these leave the suite fully green (127 pass / 0 fail):
+#        - adding `monitoring` to the namespace exclusions — undetected specifically because no
+#          fixture resource lives in `monitoring`. (Fixtures DO live outside the excluded
+#          namespaces — most are in `apps` — so "nothing outside the list" is not the reason.)
+#        - adding `+(workload)` to the POD-TEMPLATE patch — every fixture's pod template already
+#          carries a `workload` label, so the add-anchor is a no-op on every one of them
+#      The same addition on the WORKLOAD-METADATA patch IS caught (5 failures): no fixture carries
+#      `metadata.labels.workload` at workload level, so the anchor really adds a label there. The
+#      `keys | sort | join(",")` closure assertions exist for the blind direction.
+#
+#   3. FIXTURES CANNOT SEE COMPENSATING PAIRS — changes that preserve every fixture result while
+#      moving behaviour outside the range the fixtures pin. Three measured, all undetected:
+#        - `LessThanOrEquals 63` -> `NotEquals 64`  (identical at 63 and 64; lets 65+ be mutated
+#          into invalid label values)
+#        - `NotEquals ""` -> `NotIn ["", "blocked"]` (silently excludes a valid workload)
+#        - a label value of `generateName || name || ''` (named fixtures omit `generateName`, the
+#          generateName-only fixture is skipped, so an UPDATE carrying both writes the prefix)
+#      Note the shape: mutating a precondition's VALUE alone (`NotEquals "zzz"`) IS caught; these
+#      change OPERATOR AND VALUE TOGETHER. A mutation is only as good as the joint space it explores.
+#
+# So: mutate in THREE directions — subtractive, additive, and compensating — and delete an assertion
+# only when the fixtures ALONE go red for EVERY direction that assertion constrains.
+#
+# COVERAGE IS PER-MUTATION, NOT PER-ASSERTION — this is the trap that made the first two attempts at
+# this refactor wrong. An assertion is not "redundant" because one subtractive mutation was caught;
+# the same assertion is usually the only guard in another direction. Worked example, the closest
+# thing here to a redundant check:
+#
+#   "shared recommended-label policy must mutate only workload and pod-template metadata"
+#   (`.spec.rules[0].mutate.patchStrategicMerge | keys | sort | join(",")` == "metadata,spec")
+#     - SUBTRACTIVE (drop the `spec` branch):     fixtures go red on their own, 123/4  -> covered
+#     - ADDITIVE    (add a top-level branch):     fixtures stay green                  -> UNCOVERED
+#   So it is kept. One direction covered is not redundancy.
+#
+# The same per-mutation split applies in the other direction: several of the remaining assertions
+# guard mutations the fixtures DO catch (deleting the sole rule, 116/11; `+(workload)` on workload
+# metadata, 122/5) while also guarding mutations nothing else catches. Read the tables above as a
+# map of MUTATIONS to coverage, and never summarise them as a count of redundant assertions.
+# Strengthening the fixtures (#32) is the way to shrink this script, not deleting from it.
+# ---------------------------------------------------------------------------------------------
+
 if [[ ! -f "${policy}" ]]; then
   echo "FAIL: shared catalog is missing policies/best-practices/auto-vpa.yaml" >&2
   exit 1
