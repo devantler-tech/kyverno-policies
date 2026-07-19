@@ -1,0 +1,21 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "dependencyDashboard": true,
+  "assigneesFromCodeOwners": true,
+  "minimumReleaseAge": "7 days",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Bump the pinned Kyverno CLI (and any future annotated '<NAME>_VERSION' pin) in workflows. The pin is release-asset-installed, so no conventional manager sees it. Matches the portfolio's '# renovate: ...' annotation pattern (see platform's renovate.json).",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) extractVersion=(?<extractVersion>\\S+)\\s+[A-Z][A-Z0-9_]*_VERSION:\\s*\"(?<currentValue>[^\"]+)\""
+      ]
+    }
+  ]
+}
