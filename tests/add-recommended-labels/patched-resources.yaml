@@ -1,0 +1,67 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unlabelled-deployment
+  namespace: apps
+  labels:
+    app: unlabelled-deployment
+    app.kubernetes.io/name: unlabelled-deployment
+spec:
+  selector:
+    matchLabels:
+      workload: unlabelled-deployment
+  template:
+    metadata:
+      labels:
+        workload: unlabelled-deployment
+        app.kubernetes.io/name: unlabelled-deployment
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: authored-statefulset
+  namespace: apps
+  labels:
+    app: authored-app
+    app.kubernetes.io/name: authored-workload-name
+spec:
+  serviceName: authored-statefulset
+  selector:
+    matchLabels:
+      workload: authored-statefulset
+  template:
+    metadata:
+      labels:
+        workload: authored-statefulset
+        app.kubernetes.io/name: authored-pod-name
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: partial-daemonset
+  namespace: apps
+  labels:
+    app: authored-daemon-app
+    app.kubernetes.io/name: partial-daemonset
+spec:
+  selector:
+    matchLabels:
+      workload: partial-daemonset
+  template:
+    metadata:
+      labels:
+        workload: partial-daemonset
+        app.kubernetes.io/name: partial-daemonset
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
