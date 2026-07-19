@@ -38,7 +38,7 @@ spec:
     metadata:
       labels:
         workload: authored-statefulset
-        app.kubernetes.io/name: authored-pod-name
+        app.kubernetes.io/name: authored-statefulset
     spec:
       containers:
         - name: app

@@ -34,7 +34,6 @@ spec:
     metadata:
       labels:
         workload: authored-statefulset
-        app.kubernetes.io/name: authored-pod-name
     spec:
       containers:
         - name: app
@@ -55,6 +54,28 @@ spec:
     metadata:
       labels:
         workload: partial-daemonset
+    spec:
+      containers:
+        - name: app
+          image: registry.example/team/app:v1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authored-deployment
+  namespace: apps
+  labels:
+    app: authored-app
+    app.kubernetes.io/name: authored-workload-name
+spec:
+  selector:
+    matchLabels:
+      workload: authored-deployment
+  template:
+    metadata:
+      labels:
+        workload: authored-deployment
+        app.kubernetes.io/name: authored-pod-name
     spec:
       containers:
         - name: app

@@ -19,6 +19,7 @@ results:
   - policy: add-recommended-labels
     rule: add-workload-labels
     resources:
+      - apps/authored-deployment
       - kube-system/system-deployment
       - apps/nonmatching-job
     result: skip
