@@ -41,9 +41,13 @@ assert_equal() {
 # The fixtures are weaker than they look, in three ways:
 #
 #   1. RULE IDENTITY IS UNENFORCED FOR A RENAME (#32). Renaming the rule leaves the fixture suite
-#      fully GREEN (127/0): `kyverno test` scores a non-matching row `Excluded`, and `Excluded`
-#      counts as a PASS, so a `result: fail` expectation is satisfied by the named rule not
-#      existing. The rule-NAME assertion is the only guard against a silent rename.
+#      fully GREEN (127/0). Mechanism, as actually observed: when no rule matches the fixture's
+#      `rule:` key, EVERY row reports `Excluded`, and `Excluded` satisfies both expectation types
+#      this fixture uses — `result: pass` (4 rows) and `result: skip` (7 rows). Critically, the
+#      `pass` rows carry `patchedResources`, and that comparison is simply never performed once the
+#      row is Excluded, so the mutation's whole point goes unchecked. (This fixture has no
+#      `result: fail` rows at all — an earlier draft of this comment wrongly explained the blindness
+#      that way.) The rule-NAME assertion is the only guard against a silent rename.
 #      Deletion is a different story, and the earlier draft of this comment got it wrong: deleting
 #      this policy's SOLE rule does turn the fixtures red (116/11). #32's fail-open applies where a
 #      policy keeps other rules — the surviving rules keep it loadable while the deleted rule's
@@ -72,15 +76,23 @@ assert_equal() {
 #      change OPERATOR AND VALUE TOGETHER. A mutation is only as good as the joint space it explores.
 #
 # So: mutate in THREE directions — subtractive, additive, and compensating — and delete an assertion
-# only when the fixtures ALONE go red. Of the 17 measured, exactly ONE passed that bar:
+# only when the fixtures ALONE go red for EVERY direction that assertion constrains.
+#
+# COVERAGE IS PER-MUTATION, NOT PER-ASSERTION — this is the trap that made the first two attempts at
+# this refactor wrong. An assertion is not "redundant" because one subtractive mutation was caught;
+# the same assertion is usually the only guard in another direction. Worked example, the closest
+# thing here to a redundant check:
 #
 #   "shared recommended-label policy must mutate only workload and pod-template metadata"
 #   (`.spec.rules[0].mutate.patchStrategicMerge | keys | sort | join(",")` == "metadata,spec")
+#     - SUBTRACTIVE (drop the `spec` branch):     fixtures go red on their own, 123/4  -> covered
+#     - ADDITIVE    (add a top-level branch):     fixtures stay green                  -> UNCOVERED
+#   So it is kept. One direction covered is not redundancy.
 #
-# Dropping the `spec` branch from the patch turns the fixtures red on their own (123/4), because the
-# pod templates then never receive `app.kubernetes.io/name`. It is kept anyway: it is one line, it
-# states the patch's intended surface, and it still guards the ADDITIVE direction (a new top-level
-# patch branch), which the fixtures do not cover. The other 16 have no fixture coverage at all.
+# The same per-mutation split applies in the other direction: several of the remaining assertions
+# guard mutations the fixtures DO catch (deleting the sole rule, 116/11; `+(workload)` on workload
+# metadata, 122/5) while also guarding mutations nothing else catches. Read the tables above as a
+# map of MUTATIONS to coverage, and never summarise them as a count of redundant assertions.
 # Strengthening the fixtures (#32) is the way to shrink this script, not deleting from it.
 # ---------------------------------------------------------------------------------------------
 
