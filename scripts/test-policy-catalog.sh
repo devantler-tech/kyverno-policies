@@ -34,18 +34,27 @@ assert_equal() {
 # SCOPE OF THE MEASUREMENT. Those 17 are all in the `add-recommended-labels` section. This file has
 # 78 assertions in total; the image-tag, Flux/Helm and auto-VPA checks were NOT mutation-tested, so
 # they are neither proven load-bearing nor proven redundant. Measure before touching them.
+# All figures below were measured with the repo-pinned Kyverno CLI **1.18.2**
+# (`KYVERNO_CLI_VERSION`). They depend on CLI evaluator behaviour — notably how `Excluded` rows are
+# scored — so re-measure after any CLI bump rather than trusting these numbers.
 #
 # The fixtures are weaker than they look, in three ways:
 #
-#   1. RULE IDENTITY IS UNENFORCED (#32). Deleting or renaming a rule leaves the whole fixture suite
-#      GREEN: `kyverno test` scores a non-matching row `Excluded`, and `Excluded` counts as a PASS,
-#      so a `result: fail` expectation is satisfied by the rule not existing. The rule-name and
-#      rule-count assertions are the only guard against a rule silently disappearing.
+#   1. RULE IDENTITY IS UNENFORCED FOR A RENAME (#32). Renaming the rule leaves the fixture suite
+#      fully GREEN (127/0): `kyverno test` scores a non-matching row `Excluded`, and `Excluded`
+#      counts as a PASS, so a `result: fail` expectation is satisfied by the named rule not
+#      existing. The rule-NAME assertion is the only guard against a silent rename.
+#      Deletion is a different story, and the earlier draft of this comment got it wrong: deleting
+#      this policy's SOLE rule does turn the fixtures red (116/11). #32's fail-open applies where a
+#      policy keeps other rules — the surviving rules keep it loadable while the deleted rule's
+#      fixture rows silently downgrade to `Excluded`. The rule-count assertion also fires here, so
+#      it is a second guard against disappearance, not the only one.
 #
 #   2. FIXTURES CANNOT SEE SOME ADDITIONS — but which ones depends on the patch location, so measure
 #      rather than assume. Both of these leave the suite fully green (127 pass / 0 fail):
-#        - adding `monitoring` to the namespace exclusions (no fixture resource lives outside the
-#          namespaces already listed)
+#        - adding `monitoring` to the namespace exclusions — undetected specifically because no
+#          fixture resource lives in `monitoring`. (Fixtures DO live outside the excluded
+#          namespaces — most are in `apps` — so "nothing outside the list" is not the reason.)
 #        - adding `+(workload)` to the POD-TEMPLATE patch — every fixture's pod template already
 #          carries a `workload` label, so the add-anchor is a no-op on every one of them
 #      The same addition on the WORKLOAD-METADATA patch IS caught (5 failures): no fixture carries
@@ -63,7 +72,15 @@ assert_equal() {
 #      change OPERATOR AND VALUE TOGETHER. A mutation is only as good as the joint space it explores.
 #
 # So: mutate in THREE directions — subtractive, additive, and compensating — and delete an assertion
-# only when the fixtures ALONE go red. Of the 17 measured, one has passed that bar and 16 have not.
+# only when the fixtures ALONE go red. Of the 17 measured, exactly ONE passed that bar:
+#
+#   "shared recommended-label policy must mutate only workload and pod-template metadata"
+#   (`.spec.rules[0].mutate.patchStrategicMerge | keys | sort | join(",")` == "metadata,spec")
+#
+# Dropping the `spec` branch from the patch turns the fixtures red on their own (123/4), because the
+# pod templates then never receive `app.kubernetes.io/name`. It is kept anyway: it is one line, it
+# states the patch's intended surface, and it still guards the ADDITIVE direction (a new top-level
+# patch branch), which the fixtures do not cover. The other 16 have no fixture coverage at all.
 # Strengthening the fixtures (#32) is the way to shrink this script, not deleting from it.
 # ---------------------------------------------------------------------------------------------
 
