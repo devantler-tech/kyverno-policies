@@ -14,6 +14,8 @@ results:
       - apps/tagged-images
       - apps/tag-and-digest
       - apps/tag-and-sha512-digest
+      - apps/digest-only-image
+      - apps/sha512-digest-only-image
       - apps/latest-and-digest
       - apps/latest-image
       - apps/latest-init-image
@@ -23,7 +25,6 @@ results:
     rule: require-image-tag
     resources:
       - apps/tagless-image
-      - apps/digest-only-image
       - apps/registry-port-tagless-image
       - apps/tagless-init-image
       - apps/tagless-ephemeral-image
@@ -41,6 +42,7 @@ results:
       - apps/tag-and-sha512-digest
       - apps/tagless-image
       - apps/digest-only-image
+      - apps/sha512-digest-only-image
       - apps/registry-port-tagless-image
       - apps/tagless-init-image
       - apps/tagless-ephemeral-image

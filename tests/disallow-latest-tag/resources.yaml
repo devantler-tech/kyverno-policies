@@ -60,6 +60,18 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
+  name: sha512-digest-only-image
+  namespace: apps
+spec:
+  containers:
+    - name: app
+      image: "registry.example/team/app@sha512:\
+        eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\
+        eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+---
+apiVersion: v1
+kind: Pod
+metadata:
   name: registry-port-tagless-image
   namespace: apps
 spec:
