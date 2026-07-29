@@ -3,7 +3,7 @@
   "extends": [
     "config:recommended"
   ],
-  "dependencyDashboard": true,
+  "dependencyDashboard": false,
   "assigneesFromCodeOwners": true,
   "minimumReleaseAge": "7 days",
   "customManagers": [
