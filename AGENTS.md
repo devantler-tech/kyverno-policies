@@ -59,6 +59,11 @@ design — bump the pin in the same change.
 
 Tests are static and local. Never connect to or mutate a live cluster to validate a policy-library diff.
 
+Documentation links are also checked in required CI by the immutable-pinned retired repository
+validator. Its consumer-owned scope and historical exceptions live in `.github/retired-repo-links.json`.
+CI exercises a clean scan, a disposable README defect, and missing configuration;
+`scripts/test-retired-repo-links.sh <released-validator-binary>` checks the exact failure diagnostics.
+
 ## Maintenance
 
 GitHub Issues are the roadmap and work queue. Resolve the oldest actionable issue first, ship changes as
