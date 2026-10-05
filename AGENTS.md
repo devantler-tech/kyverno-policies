@@ -42,7 +42,8 @@ yamllint .
 kubectl kustomize . > /dev/null
 kyverno test . --require-tests --detailed-results --remove-color
 bash scripts/test-policy-catalog.sh
-shellcheck scripts/test-policy-catalog.sh
+bash scripts/test-retired-repo-links.sh <released-validator-binary>
+shellcheck scripts/test-policy-catalog.sh scripts/test-retired-repo-links.sh
 actionlint .github/workflows/ci.yaml
 zizmor .github/workflows/ci.yaml
 git diff --check
@@ -58,6 +59,11 @@ as a CI pass. Raising a policy's `policies.kyverno.io/minversion` above the pinn
 design — bump the pin in the same change.
 
 Tests are static and local. Never connect to or mutate a live cluster to validate a policy-library diff.
+
+Documentation links are also checked in required CI by the immutable-pinned retired repository
+validator. Its consumer-owned scope and historical exceptions live in `.github/retired-repo-links.json`.
+CI exercises a clean scan, a disposable README defect, and missing configuration;
+`bash scripts/test-retired-repo-links.sh <released-validator-binary>` checks the exact failure diagnostics.
 
 ## Maintenance
 
