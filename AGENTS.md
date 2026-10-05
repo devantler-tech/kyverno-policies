@@ -42,7 +42,8 @@ yamllint .
 kubectl kustomize . > /dev/null
 kyverno test . --require-tests --detailed-results --remove-color
 bash scripts/test-policy-catalog.sh
-shellcheck scripts/test-policy-catalog.sh
+bash scripts/test-retired-repo-links.sh <released-validator-binary>
+shellcheck scripts/test-policy-catalog.sh scripts/test-retired-repo-links.sh
 actionlint .github/workflows/ci.yaml
 zizmor .github/workflows/ci.yaml
 git diff --check
@@ -62,7 +63,7 @@ Tests are static and local. Never connect to or mutate a live cluster to validat
 Documentation links are also checked in required CI by the immutable-pinned retired repository
 validator. Its consumer-owned scope and historical exceptions live in `.github/retired-repo-links.json`.
 CI exercises a clean scan, a disposable README defect, and missing configuration;
-`scripts/test-retired-repo-links.sh <released-validator-binary>` checks the exact failure diagnostics.
+`bash scripts/test-retired-repo-links.sh <released-validator-binary>` checks the exact failure diagnostics.
 
 ## Maintenance
 
