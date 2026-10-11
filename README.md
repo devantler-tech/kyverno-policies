@@ -7,6 +7,24 @@ Policies are catalogued through the root [`kustomization.yaml`](kustomization.ya
 does not deploy it anywhere: each consumer adopts a catalog revision explicitly in a separate, validated
 change.
 
+## Try a local render
+
+You need Git and [kubectl](https://kubernetes.io/docs/tasks/tools/) with built-in Kustomize.
+No Kubernetes context, cloud credentials or running cluster is needed:
+
+```sh
+git clone https://github.com/devantler-tech/kyverno-policies.git
+cd kyverno-policies
+kubectl kustomize .
+```
+
+Success is exit 0 and the catalog's policy resources printed as YAML. This checks the Kustomize
+build, not behavior fixtures, CRD admission or a live rollout. Do not apply the floating catalog
+to a cluster. Consumers pin an immutable revision and choose policies in their own validated change.
+
+To improve the library, start with [CONTRIBUTING.md](CONTRIBUTING.md). The catalog and behavior
+reference below explain what each policy does and what a consumer must supply.
+
 ## Catalog
 
 | Policy | Behavior | Prerequisites |
@@ -18,15 +36,6 @@ change.
 | [`helm-release-enable-tests`](policies/flux/helm-release-enable-tests.yaml) | Enables Helm test actions for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
 | [`helm-release-install-crds`](policies/flux/helm-release-install-crds.yaml) | Creates and replaces chart CRDs for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
 | [`helm-release-remediation-retries`](policies/flux/helm-release-remediation-retries.yaml) | Supplies safe install and upgrade remediation defaults for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
-
-## Render the catalog
-
-```sh
-kubectl kustomize .
-```
-
-Consumers should pin an immutable repository revision and select policies deliberately. Do not apply the
-catalog to a live cluster directly from a floating branch.
 
 ## Image tag behavior
 
@@ -125,16 +134,9 @@ being concatenated.
 
 ## Validate changes
 
-```sh
-yamllint .
-kubectl kustomize . > /dev/null
-kyverno test . --require-tests --detailed-results --remove-color
-bash scripts/test-policy-catalog.sh
-shellcheck scripts/test-policy-catalog.sh
-actionlint .github/workflows/ci.yaml
-zizmor .github/workflows/ci.yaml
-git diff --check
-```
+Follow the [contribution guide](CONTRIBUTING.md#validate-your-change) for prerequisites and the
+complete local baseline, including the pinned Kyverno CLI and retired-link validator. The
+repository's [validation contract](AGENTS.md#validation) is authoritative if checks change.
 
 `kyverno test .` runs every policy's declarative behavior fixture, discovered recursively;
 `test-policy-catalog.sh` asserts the structural invariants those fixtures cannot express.
