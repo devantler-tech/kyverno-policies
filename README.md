@@ -25,6 +25,9 @@ to a cluster. Consumers pin an immutable revision and choose policies in their o
 To improve the library, start with [CONTRIBUTING.md](CONTRIBUTING.md). The catalog and behavior
 reference below explain what each policy does and what a consumer must supply.
 
+This repository currently has no repository-level LICENSE file. Public source access and this
+guide do not grant unrestricted reuse or redistribution rights.
+
 ## Catalog
 
 | Policy | Behavior | Prerequisites |

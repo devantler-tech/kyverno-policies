@@ -1,5 +1,8 @@
 # Contributing to the Kyverno policy library
 
+The repository currently has no repository-level LICENSE file. This contribution guide does not
+grant unrestricted reuse or redistribution rights; do not assume a license from public visibility.
+
 Help clarify a policy's behavior, add a focused fixture or improve a reusable policy. Discuss
 substantial work in an [issue](https://github.com/devantler-tech/kyverno-policies/issues) first.
 Do not include credentials, private topology or sensitive security evidence in public artifacts.
