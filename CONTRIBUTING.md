@@ -13,16 +13,20 @@ form for sensitive reports.
 ## Make a first contribution
 
 For a first change, improve a small explanation in `README.md` without changing the catalog or
-policy behavior. Fork `devantler-tech/kyverno-policies` on GitHub, replace `YOUR-LOGIN` below,
-and work from your fork:
+policy behavior. Install Git first, fork `devantler-tech/kyverno-policies` on GitHub, replace
+`YOUR-LOGIN` below, and enter a dedicated worktree from your fork:
 
 ```sh
 git clone https://github.com/YOUR-LOGIN/kyverno-policies.git
 cd kyverno-policies
-git switch -c docs/first-contribution
+git worktree add -b docs/first-contribution ../kyverno-policies-first-change HEAD
+cd ../kyverno-policies-first-change
 ```
 
-You need Git, Bash and standard Unix tools, kubectl with built-in Kustomize,
+Read [AGENTS.md](AGENTS.md) before editing any file. Keep changes in this isolated worktree;
+the primary clone remains separate. “Repository root” below means the worktree directory.
+
+Before validation, you also need Bash and standard Unix tools, kubectl with built-in Kustomize,
 [Mike Farah's yq v4](https://mikefarah.gitbook.io/yq/),
 [yamllint](https://yamllint.readthedocs.io/), [ShellCheck](https://www.shellcheck.net/),
 [actionlint](https://github.com/rhysd/actionlint) and [zizmor](https://docs.zizmor.sh/).
