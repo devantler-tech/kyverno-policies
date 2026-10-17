@@ -33,7 +33,7 @@ guide do not grant unrestricted reuse or redistribution rights.
 | Policy | Behavior | Prerequisites |
 |---|---|---|
 | [`add-recommended-labels`](policies/best-practices/add-recommended-labels.yaml) | Adds missing Kubernetes identity labels to Deployments, StatefulSets, and DaemonSets without replacing authored values | Kyverno 1.18+ and admission processing that includes the target workload |
-| [`auto-vpa`](policies/best-practices/auto-vpa.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.18+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
+| [`auto-vpa`](policies/best-practices/auto-vpa-generating-policy.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.19+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
 | [`disallow-latest-tag`](policies/best-practices/disallow-latest-tag.yaml) | Audits Pod images that are pinned by neither a tag nor a digest, or that use the mutable `:latest` tag | Kyverno 1.18+ and admission/background processing that includes Pods |
 | [`enforce-flux-best-practices`](policies/flux/enforce-flux-best-practices.yaml) | Validates reliability settings on Flux Kustomizations and HelmReleases | Kyverno 1.18+ and the Flux Kustomization v1 and HelmRelease v2 CRDs |
 | [`helm-release-enable-tests`](policies/flux/helm-release-enable-tests.yaml) | Enables Helm test actions for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
@@ -69,7 +69,10 @@ admission. Consumer-specific exclusions or rollout choices remain in the consume
 ## Auto VPA behavior
 
 `auto-vpa` generates and synchronizes a `VerticalPodAutoscaler` for new and existing workloads that
-Kyverno processes.
+Kyverno processes. The catalog ships it as three `GeneratingPolicy` objects, one per workload kind
+(`auto-vpa-deployment`, `auto-vpa-statefulset`, `auto-vpa-daemonset`), because Kyverno 1.19 deprecates
+classic `ClusterPolicy` and plans to remove it in 1.20. Consumers moving from a classic auto-vpa policy
+follow [Migrating to the GeneratingPolicy form](#migrating-to-the-generatingpolicy-form).
 
 | Workload | Update mode | Controlled resources | Recommendation bounds |
 |---|---|---|---|
@@ -105,31 +108,53 @@ Important operating constraints:
   far shorter). Consumers adopting this from an earlier workload-name-only version must clean up the
   previously generated `<name>` VPAs, which the new rules no longer manage (migration/cleanup tracked in
   [issue #2](https://github.com/devantler-tech/kyverno-policies/issues/2)).
-- The catalog still ships the classic `ClusterPolicy` form. A `GeneratingPolicy` port exists alongside it
-  but is not in the catalog yet -- see below. Migration is tracked in
-  [issue #1](https://github.com/devantler-tech/kyverno-policies/issues/1).
+- The auto-vpa form needs **Kyverno 1.19 or later**. On 1.18.x, `generateExisting` is accepted but does
+  nothing for workloads that already exist
+  ([kyverno/kyverno#15722](https://github.com/kyverno/kyverno/issues/15722); fixed for 1.19 by
+  [#16041](https://github.com/kyverno/kyverno/pull/16041) and never backported), so existing workloads
+  would get no VPA until their next update.
 
-### The GeneratingPolicy port
+### Migrating to the GeneratingPolicy form
 
-Kyverno is retiring classic `ClusterPolicy` generate rules after the 1.19 support window, so
-[`auto-vpa-generating-policy.yaml`](policies/best-practices/auto-vpa-generating-policy.yaml) carries the
-same three rules on the `policies.kyverno.io/v1` `GeneratingPolicy` API, one policy per workload
-kind. It loads and serves admission-time generation on Kyverno 1.18+, the same floor as the rest of
-the catalog — **but adopting it as the registered auto-vpa form with full classic parity requires
-Kyverno ≥ 1.19**: on 1.18.x, `generateExisting` is schema-accepted yet inert for pre-existing
-workloads ([kyverno/kyverno#15722](https://github.com/kyverno/kyverno/issues/15722); fixed for 1.19
-by [#16041](https://github.com/kyverno/kyverno/pull/16041), not backported), so a 1.18.x migration
-would leave existing workloads without VPAs until their next update.
+The catalog registers exactly one auto-vpa form at a time, and that form is now the `GeneratingPolicy`
+one. The classic [`auto-vpa.yaml`](policies/best-practices/auto-vpa.yaml) stays in the repository,
+unregistered and still tested, as the rollback form until every consumer has migrated. Its removal is a
+separate change. The ported policies are tested against the *same* expected-output fixtures as the
+classic policy (`tests/auto-vpa/generated-*-vpa.yaml`), so the VPAs they generate are identical.
 
-**It is not registered in `kustomization.yaml`, so it reaches no cluster.** Consumers select policies from
-the catalog, so leaving the port out is how it ships without being live: you get a migration target that
-is proven before anything is asked to move. Both forms generate a VPA under the same name for the same
-workload, so registering them together would have two policies contend for one object -- the catalog
-therefore enforces that exactly one of the two is registered at a time.
+The two forms cannot take over each other's VPAs, so a consumer moves in two separately reconciled
+steps and never runs both at once:
 
-Its tests assert the ported policies against the *same* expected-output fixtures the classic policy is
-held to (`tests/auto-vpa/generated-*-vpa.yaml`) rather than expectations written next to the new code,
-because that is the only version of the check that can actually detect divergence.
+- Kyverno labels each generated VPA with the policy that owns it. A `GeneratingPolicy` leaves alone any
+  VPA it does not own, without reporting an error, and only creates the ones that are missing.
+- Deleting a classic policy whose rules synchronize also deletes the VPAs it generated, unless the rule
+  sets `orphanDownstreamOnPolicyDelete: true`. The catalog's classic form does not set it.
+- While both forms exist, the classic policy keeps rewriting the VPAs it owns, and the new form skips
+  them.
+
+If both changes land in one reconcile, the new policies skip the old VPAs, the old policy's cleanup then
+deletes them, and they come back only when the background controller next re-scans its policies (by
+default up to an hour later).
+
+**Rollout, per cluster:**
+
+1. Confirm the cluster runs Kyverno 1.19.0 or later and meets the prerequisites in the catalog table.
+   Inventory every VPA you did not generate with auto-vpa and exclude its target, as for the classic form.
+2. Remove the classic auto-vpa policy and let it reconcile. Wait until no VPA labelled
+   `generate.kyverno.io/policy-name=auto-vpa` remains. Pods keep their current requests while they have
+   no VPA.
+3. Reference this catalog's `auto-vpa-generating-policy.yaml` and let it reconcile. Kyverno generates a
+   VPA for every existing matching workload straight away.
+4. Check that every matching workload has exactly one VPA, labelled with the policy for its kind
+   (`auto-vpa-deployment`, `auto-vpa-statefulset` or `auto-vpa-daemonset`).
+
+**Rollback** is the same two steps in reverse: remove the three `GeneratingPolicy` objects and wait until
+their VPAs are gone, then re-reference the classic `auto-vpa.yaml` (or pin the previous catalog revision).
+
+A consumer whose own classic copy names VPAs differently (for example without the `-<kind>` suffix) still
+follows step 2 first, so that no workload ends up with two VPAs. The migration is tracked in
+[issue #1](https://github.com/devantler-tech/kyverno-policies/issues/1), and consumer adoption in
+[issue #9](https://github.com/devantler-tech/kyverno-policies/issues/9).
 
 One translation note for anyone extending it: CEL infers a map's value type from its first entry, so
 resource literals wrap every value in `dyn(...)`, and fields read off `object` need `string(...)` before

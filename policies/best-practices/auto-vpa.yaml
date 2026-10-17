@@ -1,4 +1,9 @@
 ---
+# ROLLBACK FORM — NOT REGISTERED in the root kustomization.yaml. The catalog's auto-vpa is
+# auto-vpa-generating-policy.yaml. This classic ClusterPolicy stays, still tested, so a
+# consumer can roll back by referencing it directly until every consumer has migrated; see the
+# README's "Migrating to the GeneratingPolicy form". Never apply it together with the
+# GeneratingPolicy form.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
