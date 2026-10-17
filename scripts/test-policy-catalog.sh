@@ -741,6 +741,26 @@ if [[ "${classic_vpa_registered}" -eq 0 && "${ported_vpa_registered}" -eq 0 ]]; 
   exit 1
 fi
 
+# Issue #1 made the GeneratingPolicy form the registered one; the classic file stays only as the
+# documented rollback form. Pin that decision so an accidental re-registration of the deprecated
+# ClusterPolicy form fails here instead of reaching consumers.
+if [[ "${ported_vpa_registered}" -ne 1 ]]; then
+  echo "FAIL: the GeneratingPolicy auto-vpa must be the registered form, exactly once" >&2
+  exit 1
+fi
+
+# generateExisting only covers pre-existing workloads from Kyverno 1.19.0 (kyverno/kyverno#15722),
+# so every ported policy must declare that floor; CI then holds the pinned CLI at or above it.
+ported_vpa_floor_count="$(
+  yq --no-doc '[select(.metadata.annotations."policies.kyverno.io/minversion" == "1.19.0")] | length' \
+    "${ported_vpa_policy}" | awk '{s+=$1} END {print s}'
+)"
+
+if [[ "${ported_vpa_floor_count}" -ne 3 ]]; then
+  echo "FAIL: every ported auto-vpa policy must declare policies.kyverno.io/minversion 1.19.0" >&2
+  exit 1
+fi
+
 ported_vpa_policy_count="$(yq --no-doc '.metadata.name' "${ported_vpa_policy}" | wc -l | tr -d ' ')"
 
 if [[ "${ported_vpa_policy_count}" -ne 3 ]]; then

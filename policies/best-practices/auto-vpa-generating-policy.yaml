@@ -1,24 +1,23 @@
 ---
-# Ported form of policies/best-practices/auto-vpa.yaml onto the GeneratingPolicy API.
+# The catalog's auto-vpa: the classic policies/best-practices/auto-vpa.yaml rules on the
+# GeneratingPolicy API, which Kyverno keeps after classic ClusterPolicy generate rules are
+# retired.
 #
-# DELIBERATELY NOT REGISTERED in the root kustomization.yaml. Consumers reference the
-# catalog, so leaving this out of the catalog is how the port ships without reaching any
-# cluster: it can be proven here, and adopted later as a separate, reversible step.
-# Registering it while the classic auto-vpa is still registered would have BOTH forms
-# generating a VerticalPodAutoscaler for the same workload under the same name.
+# THIS IS THE REGISTERED FORM in the root kustomization.yaml. The classic file stays in the
+# repository, unregistered, as the rollback form until every consumer has migrated: never
+# apply both to one cluster, because both generate a VerticalPodAutoscaler for the same
+# workload under the same name. The README's "Migrating to the GeneratingPolicy form"
+# section is the consumer rollout and rollback procedure.
 #
 # Split into one policy per workload kind, mirroring the classic policy's three rules:
 # GeneratingPolicy applies spec.matchConstraints to the whole policy, so three kinds with
 # three different VPA bodies cannot share one policy without branching inside CEL.
 #
-# ⚠️ KNOWN 1.18.x LIMITATION — generateExisting parity needs Kyverno >= 1.19. The
-# spec.evaluation.generateExisting field is accepted by the 1.18 schema but the behaviour
-# does not fire for PRE-EXISTING triggers (kyverno/kyverno#15722, a regression vs the
-# classic rule; fixed by kyverno/kyverno#16041, milestone 1.19.0, NOT backported to any
-# 1.18.x release as of 1.18.2). On 1.18.x an existing workload only gets its VPA on its
-# next CREATE/UPDATE admission. ADOPTION GATE: registering this port as the catalog's
-# auto-vpa form with full classic parity requires the consumer to run Kyverno >= 1.19;
-# until then the classic policy remains the registered form.
+# FLOOR: Kyverno 1.19.0. On 1.18.x spec.evaluation.generateExisting is schema-accepted but
+# does not fire for PRE-EXISTING workloads (kyverno/kyverno#15722, a regression against the
+# classic rule; fixed by kyverno/kyverno#16041 for 1.19.0 and never backported), so an
+# existing workload would get its VPA only on its next CREATE/UPDATE admission. The
+# minversion annotations below declare that floor.
 apiVersion: policies.kyverno.io/v1
 kind: GeneratingPolicy
 metadata:
@@ -28,11 +27,10 @@ metadata:
     policies.kyverno.io/category: Autoscaling
     policies.kyverno.io/severity: low
     policies.kyverno.io/subject: Deployment
-    policies.kyverno.io/minversion: 1.18.0
+    policies.kyverno.io/minversion: 1.19.0
     policies.kyverno.io/description: >-
       Generates a recommendation-bounded VerticalPodAutoscaler for each Deployment.
-      GeneratingPolicy form of the auto-vpa rule of the same name; kept out of the
-      catalog until consumers migrate.
+      GeneratingPolicy form of the classic auto-vpa rule of the same name.
 spec:
   # Parity with the classic rules' `synchronize: true` + `generateExisting: true`:
   # on GeneratingPolicy both live under spec.evaluation and default to false, so
@@ -95,11 +93,10 @@ metadata:
     policies.kyverno.io/category: Autoscaling
     policies.kyverno.io/severity: low
     policies.kyverno.io/subject: StatefulSet
-    policies.kyverno.io/minversion: 1.18.0
+    policies.kyverno.io/minversion: 1.19.0
     policies.kyverno.io/description: >-
       Generates a recommendation-bounded VerticalPodAutoscaler for each StatefulSet.
-      GeneratingPolicy form of the auto-vpa rule of the same name; kept out of the
-      catalog until consumers migrate.
+      GeneratingPolicy form of the classic auto-vpa rule of the same name.
 spec:
   # Parity with the classic rules' `synchronize: true` + `generateExisting: true`:
   # on GeneratingPolicy both live under spec.evaluation and default to false, so
@@ -159,11 +156,10 @@ metadata:
     policies.kyverno.io/category: Autoscaling
     policies.kyverno.io/severity: low
     policies.kyverno.io/subject: DaemonSet
-    policies.kyverno.io/minversion: 1.18.0
+    policies.kyverno.io/minversion: 1.19.0
     policies.kyverno.io/description: >-
       Generates a CPU-only recommendation-bounded VerticalPodAutoscaler for each
-      DaemonSet. GeneratingPolicy form of the auto-vpa rule of the same name; kept out
-      of the catalog until consumers migrate.
+      DaemonSet. GeneratingPolicy form of the classic auto-vpa rule of the same name.
 spec:
   # Parity with the classic rules' `synchronize: true` + `generateExisting: true`:
   # on GeneratingPolicy both live under spec.evaluation and default to false, so
