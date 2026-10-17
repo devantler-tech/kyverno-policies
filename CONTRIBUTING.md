@@ -31,7 +31,7 @@ Before validation, you also need Bash and standard Unix tools, kubectl with buil
 [yamllint](https://yamllint.readthedocs.io/), [ShellCheck](https://www.shellcheck.net/),
 [actionlint](https://github.com/rhysd/actionlint) and [zizmor](https://docs.zizmor.sh/).
 Install the [Kyverno CLI](https://kyverno.io/docs/kyverno-cli/) version pinned as
-`KYVERNO_CLI_VERSION` in [CI](.github/workflows/ci.yaml), currently **1.18.2**, and check
+`KYVERNO_CLI_VERSION` in [CI](.github/workflows/ci.yaml), currently **1.19.1**, and check
 `kyverno version` before testing. A different CLI can evaluate the same fixture differently.
 CI's install steps verify the release asset's repository-pinned digest and Sigstore identity.
 These tests are local; no cluster context, App credentials or cloud account is required.
