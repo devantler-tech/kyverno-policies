@@ -1,7 +1,7 @@
 ---
-# The catalog's auto-vpa: the classic policies/best-practices/auto-vpa.yaml rules on the
-# GeneratingPolicy API, which Kyverno keeps after classic ClusterPolicy generate rules are
-# retired.
+# The catalog's auto-vpa: a port of the classic policies/best-practices/auto-vpa.yaml
+# ClusterPolicy rules to the GeneratingPolicy API, which Kyverno keeps after classic
+# ClusterPolicy generate rules are retired. The classic ClusterPolicy is a separate file.
 #
 # THIS IS THE REGISTERED FORM in the root kustomization.yaml. The classic file stays in the
 # repository, unregistered, as the rollback form until every consumer has migrated: never
