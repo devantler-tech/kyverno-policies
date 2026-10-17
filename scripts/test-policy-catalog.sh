@@ -39,9 +39,12 @@ assert_equal() {
 # section. This file has
 # 78 assertions in total; the image-tag, Flux/Helm and auto-VPA checks were NOT mutation-tested, so
 # they are neither proven load-bearing nor proven redundant. Measure before touching them.
-# All figures below were measured with the repo-pinned Kyverno CLI **1.18.2**
-# (`KYVERNO_CLI_VERSION`). They depend on CLI evaluator behaviour — notably how `Excluded` rows are
-# scored — so re-measure after any CLI bump rather than trusting these numbers.
+# All figures below were measured with the repo-pinned Kyverno CLI **1.18.2** and re-measured
+# unchanged on **1.19.1** (`KYVERNO_CLI_VERSION`): baseline 127/0, rule rename 127/0, sole-rule
+# deletion 116/11, dropped `spec` branch 123/4, `+(workload)` on workload metadata 122/5 and on the pod
+# template 127/0, `monitoring` exclusion 127/0, `LessThanOrEquals 63` -> `NotEquals 64` 127/0. They
+# depend on CLI evaluator behaviour — notably how `Excluded` rows are scored — so re-measure after any
+# CLI bump rather than trusting these numbers.
 #
 # The fixtures are weaker than they look, in three ways:
 #

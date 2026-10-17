@@ -35,7 +35,7 @@ env:
   # verified) ships on an agent-authored branch, since dependency-bot branches are
   # hands-off (rationale on #16, incl. why an auto-mergeable path was rejected).
   # renovate: datasource=github-releases depName=kyverno/kyverno extractVersion=^v(?<version>.*)$
-  KYVERNO_CLI_VERSION: "1.18.2"
+  KYVERNO_CLI_VERSION: "1.19.1"
   # Digests are pinned HERE rather than taken from the release's own checksums.txt: a Git
   # tag is mutable, so a checksum fetched alongside the asset it verifies would simply be
   # replaced together with it. They are the IMMUTABLE anchor — the cosign identity check
@@ -43,8 +43,8 @@ env:
   # and re-run the release workflow to mint the same identity for a replacement; only
   # this repo-side digest detects that. Bump these with KYVERNO_CLI_VERSION, from the
   # upstream checksums.txt of the new release.
-  KYVERNO_CLI_SHA256_ARM64: cc69bc6638da1993146c134943fac91cbc9dd0ce60a3e88c6d7c518ae00f1abc
-  KYVERNO_CLI_SHA256_X86_64: a461096a3111e6a4134c2bd135ddd8e0bfd9d466a5d5b17810b76a484fffdae4
+  KYVERNO_CLI_SHA256_ARM64: 2cf5febbedaafca5d3c7819925a49f9723bf4c3337a1327b6f72970480af385a
+  KYVERNO_CLI_SHA256_X86_64: d9d7a857755ccd027cba8b2a5146a515c1590d65b38cb37a2170809329e4f393
 
 jobs:
   retired-repo-links:
