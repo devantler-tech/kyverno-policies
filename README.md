@@ -148,8 +148,29 @@ default up to an hour later).
 4. Check that every matching workload has exactly one VPA, labelled with the policy for its kind
    (`auto-vpa-deployment`, `auto-vpa-statefulset` or `auto-vpa-daemonset`).
 
+**Consumers of the root `kustomization.yaml`** cannot do steps 2 and 3 with one revision bump: the bump
+removes the classic policy and adds the new ones in the same reconcile. Do step 2 at the revision you
+already pin, by deleting the classic policy with a patch in your own kustomization:
+
+```yaml
+patches:
+  - patch: |-
+      $patch: delete
+      apiVersion: kyverno.io/v1
+      kind: ClusterPolicy
+      metadata:
+        name: auto-vpa
+```
+
+Once that has reconciled and the classic VPAs are gone, do step 3 by bumping the pinned revision and
+dropping the patch in the same change. Keeping the patch fails the build, because the new revision has no
+`ClusterPolicy/auto-vpa` for it to match.
+
 **Rollback** is the same two steps in reverse: remove the three `GeneratingPolicy` objects and wait until
 their VPAs are gone, then re-reference the classic `auto-vpa.yaml` (or pin the previous catalog revision).
+A root-kustomization consumer removes them with the same kind of patch at the current revision, one per
+policy (`apiVersion: policies.kyverno.io/v1`, `kind: GeneratingPolicy`), then pins the previous revision
+and drops the patches in the same change.
 
 A consumer whose own classic copy names VPAs differently (for example without the `-<kind>` suffix) still
 follows step 2 first, so that no workload ends up with two VPAs. The migration is tracked in
