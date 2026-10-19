@@ -88,6 +88,10 @@ Important operating constraints:
   `InPlacePodVerticalScaling`; even on a compatible cluster, an infeasible resize can fall back to pod
   recreation. This policy does not override the updater's global minimum-replica guard, and
   PodDisruptionBudgets still govern disruptive updates.
+- The generated VPAs set no `updatePolicy.minReplicas`, so the updater's `--min-replicas` flag decides
+  which workloads it acts on. Its default is 2, so a single-replica Deployment is resized only when its
+  pod is recreated for another reason. Run the updater with `--min-replicas=1` if single-replica
+  workloads should be right-sized too.
 - `RequestsAndLimits` preserves the authored limit-to-request ratio. `minAllowed` and `maxAllowed` bound
   recommendations and requests, not the proportional limits; workloads need sensible starting ratios and
   a `LimitRange` or admission policy when hard limit ceilings are required.
