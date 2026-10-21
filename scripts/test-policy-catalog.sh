@@ -3,7 +3,6 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-policy="${repo_root}/policies/best-practices/auto-vpa.yaml"
 image_tag_policy="${repo_root}/policies/best-practices/disallow-latest-tag.yaml"
 recommended_labels_policy="${repo_root}/policies/best-practices/add-recommended-labels.yaml"
 recommended_labels_test="${repo_root}/tests/add-recommended-labels/kyverno-test.yaml"
@@ -103,11 +102,6 @@ assert_equal() {
 # map of MUTATIONS to coverage, and never summarise them as a count of redundant assertions.
 # Strengthening the fixtures (#32) is the way to shrink this script, not deleting from it.
 # ---------------------------------------------------------------------------------------------
-
-if [[ ! -f "${policy}" ]]; then
-  echo "FAIL: shared catalog is missing policies/best-practices/auto-vpa.yaml" >&2
-  exit 1
-fi
 
 if [[ ! -f "${image_tag_policy}" ]]; then
   echo "FAIL: shared catalog is missing policies/best-practices/disallow-latest-tag.yaml" >&2
@@ -709,16 +703,21 @@ if [[ "${flux_legacy_helmrelease_match_count}" -ne 0 ]]; then
   exit 1
 fi
 
-# The GeneratingPolicy port of auto-vpa and the classic form generate a VerticalPodAutoscaler
-# under the SAME name for the SAME workload. Registering both in the catalog would have two
-# policies contend for one object on every consumer cluster, so the catalog may carry at most
-# one of them -- and must never carry neither, which would silently drop auto-vpa entirely.
-# This is what keeps the port default-off while it is unadopted, and it stays correct after
-# adoption flips which of the two is registered.
+# The GeneratingPolicy auto-vpa and a classic auto-vpa ClusterPolicy generate a
+# VerticalPodAutoscaler under the SAME name for the SAME workload, so two registered forms
+# would contend for one object on every consumer cluster, and no registered form would
+# silently drop auto-vpa entirely. The catalog ships exactly one form: the GeneratingPolicy.
+# Consumers that still need the deprecated classic form keep their own copy or pin catalog
+# revision 44ed118 (README, "Migrating to the GeneratingPolicy form").
 ported_vpa_policy="${repo_root}/policies/best-practices/auto-vpa-generating-policy.yaml"
 
 if [[ ! -f "${ported_vpa_policy}" ]]; then
   echo "FAIL: shared catalog is missing policies/best-practices/auto-vpa-generating-policy.yaml" >&2
+  exit 1
+fi
+
+if [[ -e "${repo_root}/policies/best-practices/auto-vpa.yaml" ]]; then
+  echo "FAIL: the classic auto-vpa ClusterPolicy must not be shipped beside the GeneratingPolicy form" >&2
   exit 1
 fi
 
@@ -741,9 +740,9 @@ if [[ "${classic_vpa_registered}" -eq 0 && "${ported_vpa_registered}" -eq 0 ]]; 
   exit 1
 fi
 
-# Issue #1 made the GeneratingPolicy form the registered one; the classic file stays only as the
-# documented rollback form. Pin that decision so an accidental re-registration of the deprecated
-# ClusterPolicy form fails here instead of reaching consumers.
+# Issue #1 made the GeneratingPolicy form the catalog's auto-vpa. Pin that decision so an
+# accidental re-registration of the deprecated ClusterPolicy form fails here instead of
+# reaching consumers.
 if [[ "${ported_vpa_registered}" -ne 1 ]]; then
   echo "FAIL: the GeneratingPolicy auto-vpa must be the registered form, exactly once" >&2
   exit 1
@@ -794,62 +793,17 @@ if [[ "${ported_vpa_synchronized_count}" -ne 3 ]]; then
   exit 1
 fi
 
-rule_count="$(yq '.spec.rules | length' "${policy}")"
-synchronized_rule_count="$(
-  yq '[.spec.rules[].generate | select(.synchronize == true and .generateExisting == true)] | length' \
-    "${policy}"
-)"
-
-if [[ "${rule_count}" -eq 0 || "${synchronized_rule_count}" -ne "${rule_count}" ]]; then
-  echo "FAIL: every auto-vpa rule must synchronize and generate for existing workloads" >&2
-  exit 1
-fi
-
 # Declarative behavior specs (tests/*/kyverno-test.yaml) are NOT run here: CI runs
 # `kyverno test .` from the repo root, which discovers every fixture recursively.
 # Listing fixture paths here instead meant a new policy's fixture was silently never
 # executed until someone remembered to add it below. This script now asserts only the
 # structural invariants that `kyverno test` cannot express.
 
-classic_positive_dir="$(mktemp -d)"
-output_dir="$(mktemp -d)"
 ported_positive_dir="$(mktemp -d)"
 ported_negative_dir="$(mktemp -d)"
-trap 'rm -rf "${classic_positive_dir}" "${output_dir}" "${ported_positive_dir}" "${ported_negative_dir}"' EXIT
+trap 'rm -rf "${ported_positive_dir}" "${ported_negative_dir}"' EXIT
 
-# Positive control FIRST: `kyverno apply` silently drops a policy it cannot
-# parse ("Applying 0 policy rule(s)", exit 0), so "no files generated for a
-# Job" alone passes vacuously when the policy never loaded. Proving the same
-# policy invocation generates for matched workloads is what gives the
-# unmatched-Job assertion below its teeth.
-kyverno apply "${policy}" \
-  --resource "${repo_root}/tests/auto-vpa/resources.yaml" \
-  --output "${classic_positive_dir}" \
-  --remove-color >/dev/null
-
-# The classic single-policy form writes every generated resource into one
-# file, so count VPA documents rather than files.
-classic_generated_count="$(
-  find "${classic_positive_dir}" -type f -exec grep -h '^kind: VerticalPodAutoscaler$' {} + | wc -l | tr -d ' '
-)"
-
-if [[ "${classic_generated_count}" -ne 3 ]]; then
-  echo "FAIL: auto-vpa must generate one VPA per matched workload kind (got ${classic_generated_count})" >&2
-  exit 1
-fi
-
-kyverno apply "${policy}" \
-  --resource "${repo_root}/tests/auto-vpa/unmatched-job.yaml" \
-  --output "${output_dir}" \
-  --remove-color >/dev/null
-
-if find "${output_dir}" -type f -print -quit | grep -q .; then
-  echo "FAIL: auto-vpa generated a resource for an unmatched Job" >&2
-  exit 1
-fi
-
-# The same matched/unmatched control pair for the PORTED form, registered or not — the
-# port ships in this repo, so its behavior is held here rather than only after adoption.
+# A matched/unmatched control pair for the auto-vpa policies.
 # The positive control comes FIRST because it is what gives the negative control teeth:
 # `kyverno apply` silently drops a policy it cannot parse ("Applying 0 policy rule(s)",
 # exit 0), which would make "no files generated for a Job" pass vacuously.
