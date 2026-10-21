@@ -120,11 +120,12 @@ Important operating constraints:
 
 ### Migrating to the GeneratingPolicy form
 
-The catalog registers exactly one auto-vpa form at a time, and that form is now the `GeneratingPolicy`
-one. The classic [`auto-vpa.yaml`](policies/best-practices/auto-vpa.yaml) stays in the repository,
-unregistered and still tested, as the rollback form until every consumer has migrated. Its removal is a
-separate change. The ported policies are tested against the *same* expected-output fixtures as the
-classic policy (`tests/auto-vpa/generated-*-vpa.yaml`), so the VPAs they generate are identical.
+The catalog ships only the `GeneratingPolicy` form of auto-vpa. Its tests hold it to the classic
+policy's recorded output (`tests/auto-vpa/generated-*-vpa.yaml`), so the VPAs it generates are identical
+to those of a classic auto-vpa `ClusterPolicy`. The last catalog revision that still carries the classic
+form is
+[`44ed118`](https://github.com/devantler-tech/kyverno-policies/blob/44ed11893f4b56cdc5634159a278407ada1bf70e/policies/best-practices/auto-vpa.yaml);
+pin it if you need the classic file, or keep your own copy as both current consumers do.
 
 The two forms cannot take over each other's VPAs, so a consumer moves in two separately reconciled
 steps and never runs both at once:
@@ -132,7 +133,7 @@ steps and never runs both at once:
 - Kyverno labels each generated VPA with the policy that owns it. A `GeneratingPolicy` leaves alone any
   VPA it does not own, without reporting an error, and only creates the ones that are missing.
 - Deleting a classic policy whose rules synchronize also deletes the VPAs it generated, unless the rule
-  sets `orphanDownstreamOnPolicyDelete: true`. The catalog's classic form does not set it.
+  sets `orphanDownstreamOnPolicyDelete: true`. The classic file at catalog revision `44ed118` does not set it.
 - While both forms exist, the classic policy keeps rewriting the VPAs it owns, and the new form skips
   them.
 
@@ -153,7 +154,8 @@ default up to an hour later).
    (`auto-vpa-deployment`, `auto-vpa-statefulset` or `auto-vpa-daemonset`).
 
 **Rollback** is the same two steps in reverse: remove the three `GeneratingPolicy` objects and wait until
-their VPAs are gone, then re-reference the classic `auto-vpa.yaml` (or pin the previous catalog revision).
+their VPAs are gone, then re-reference your classic auto-vpa policy (your own copy, or the catalog file at
+revision `44ed118`).
 
 A consumer whose own classic copy names VPAs differently (for example without the `-<kind>` suffix) still
 follows step 2 first, so that no workload ends up with two VPAs. The migration is tracked in
