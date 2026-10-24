@@ -1,0 +1,49 @@
+---
+# The catalog's Helm test opt-in, on the MutatingPolicy API, which Kyverno keeps after classic
+# ClusterPolicy mutate rules are retired. Same opt-in label, matched API, operations and patched
+# result as the classic `helm-release-enable-tests` ClusterPolicy
+# (helm-release-enable-tests.yaml, kept unregistered as the rollback form).
+# tests/helm-release-enable-tests-mutating-policy holds it to the classic fixtures.
+#
+# A JSONPatch mutation, not an ApplyConfiguration: the pinned CLI cannot apply an
+# ApplyConfiguration to a custom resource ("type converter must not be nil"), so that form
+# could not be tested. Background evaluation is off and mutateExisting stays at its default
+# (off), so, like the classic rule, it acts only on create and update admission requests.
+#
+# FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin.
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: helm-release-enable-tests
+  annotations:
+    policies.kyverno.io/title: Helm Release Enable Tests (MutatingPolicy)
+    policies.kyverno.io/category: Flux
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: HelmRelease
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Enables Helm test actions for Flux HelmRelease v2 resources which opt in
+      with the helm.toolkit.fluxcd.io/helm-test: enabled label. MutatingPolicy
+      form of the classic helm-release-enable-tests policy.
+spec:
+  evaluation:
+    background:
+      enabled: false
+  matchConstraints:
+    objectSelector:
+      matchLabels:
+        helm.toolkit.fluxcd.io/helm-test: enabled
+    resourceRules:
+      - apiGroups: ["helm.toolkit.fluxcd.io"]
+        apiVersions: ["v2"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["helmreleases"]
+  mutations:
+    # Sets spec.test.enable to true, overriding an authored false, and keeps every sibling
+    # test setting.
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          object.spec.?test.hasValue()
+          ? [JSONPatch{op: "add", path: "/spec/test/enable", value: true}]
+          : [JSONPatch{op: "add", path: "/spec/test", value: {"enable": true}}]

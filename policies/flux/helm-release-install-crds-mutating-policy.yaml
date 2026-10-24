@@ -1,0 +1,55 @@
+---
+# The catalog's Helm CRD lifecycle opt-in, on the MutatingPolicy API, which Kyverno keeps after
+# classic ClusterPolicy mutate rules are retired. Same opt-in label, matched API, operations and
+# patched result as the classic `helm-release-install-crds` ClusterPolicy
+# (helm-release-install-crds.yaml, kept unregistered as the rollback form).
+# tests/helm-release-install-crds-mutating-policy holds it to the classic fixtures.
+#
+# A JSONPatch mutation, not an ApplyConfiguration: the pinned CLI cannot apply an
+# ApplyConfiguration to a custom resource ("type converter must not be nil"), so that form
+# could not be tested. Background evaluation is off and mutateExisting stays at its default
+# (off), so, like the classic rule, it acts only on create and update admission requests.
+#
+# FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin.
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: helm-release-install-crds
+  annotations:
+    policies.kyverno.io/title: Helm Release Install CRDs (MutatingPolicy)
+    policies.kyverno.io/category: Flux
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: HelmRelease
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Configures Flux HelmRelease v2 resources which opt in with the
+      helm.toolkit.fluxcd.io/crds: enabled label to create and replace chart CRDs
+      during install and upgrade actions. MutatingPolicy form of the classic
+      helm-release-install-crds policy.
+spec:
+  evaluation:
+    background:
+      enabled: false
+  matchConstraints:
+    objectSelector:
+      matchLabels:
+        helm.toolkit.fluxcd.io/crds: enabled
+    resourceRules:
+      - apiGroups: ["helm.toolkit.fluxcd.io"]
+        apiVersions: ["v2"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["helmreleases"]
+  mutations:
+    # Sets spec.install.crds and spec.upgrade.crds to CreateReplace, overriding an authored
+    # strategy, and keeps every sibling install and upgrade setting.
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          [
+            object.spec.?install.hasValue()
+            ? JSONPatch{op: "add", path: "/spec/install/crds", value: "CreateReplace"}
+            : JSONPatch{op: "add", path: "/spec/install", value: {"crds": "CreateReplace"}},
+            object.spec.?upgrade.hasValue()
+            ? JSONPatch{op: "add", path: "/spec/upgrade/crds", value: "CreateReplace"}
+            : JSONPatch{op: "add", path: "/spec/upgrade", value: {"crds": "CreateReplace"}}
+          ]

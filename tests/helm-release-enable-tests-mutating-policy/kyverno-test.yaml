@@ -1,0 +1,36 @@
+---
+# Parity spec for the MutatingPolicy port of helm-release-enable-tests.
+#
+# The rows below repeat the classic rule's rows in ../helm-release-enable-tests/kyverno-test.yaml,
+# against the same fixture file and the same patched fixtures. Sharing the classic fixtures is
+# the parity claim: an input set authored next to the new policy could drift with it and
+# prove nothing.
+#
+# Two differences, both CLI behaviour rather than policy behaviour. A matched resource whose
+# patch changes nothing is a `skip` for the classic rule and a `pass` here, so those rows
+# expect `pass` with the unchanged fixture file as their patched output. A resource the
+# policy does not select reports `Excluded`, which satisfies a `skip` row however the policy
+# behaves, so those rows are left out: scripts/test-policy-catalog.sh compares every fixture
+# resource after the classic and the MutatingPolicy forms instead.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: helm-release-enable-tests-mutating-policy-matches-classic-output
+policies:
+  - ../../policies/flux/helm-release-enable-tests-mutating-policy.yaml
+resources:
+  - ../helm-release-enable-tests/resources.yaml
+results:
+  - policy: helm-release-enable-tests
+    resources:
+      - apps/opted-in-without-test-settings
+      - apps/opted-in-with-existing-test-settings
+    patchedResources: ../helm-release-enable-tests/patched-resources.yaml
+    kind: HelmRelease
+    result: pass
+  - policy: helm-release-enable-tests
+    resources:
+      - apps/already-enabled
+    patchedResources: ../helm-release-enable-tests/resources.yaml
+    kind: HelmRelease
+    result: pass
