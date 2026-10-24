@@ -231,8 +231,10 @@ What changes for a consumer:
 - **Exclusions and enforcement.** Classic exclusions and `failureAction` patches do not apply to the new
   kind. Patch each `ValidatingPolicy` instead: `spec.validationActions` for `Deny`, and
   `spec.matchConstraints` (`namespaceSelector`, `excludeResourceRules`) or `spec.matchConditions` for
-  exclusions. A classic `kyverno.io` `PolicyException` does not cover the new kind; use a
-  `policies.kyverno.io/v1` `PolicyException` whose `policyRefs` name the `ValidatingPolicy`.
+  exclusions. A Kustomize patch target name is a regular expression, so one patch can cover several
+  policies, for example `name: "(require-image-tag|disallow-latest-tag)"`. A classic `kyverno.io`
+  `PolicyException` does not cover the new kind; use a `policies.kyverno.io/v1` `PolicyException` whose
+  `policyRefs` name the `ValidatingPolicy`.
 - **Existing resources.** Each policy sets `evaluation.background.enabled: true`, the field Kyverno uses
   to apply a `ValidatingPolicy` to existing resources during a background scan, as the classic policies'
   `background: true` does.
