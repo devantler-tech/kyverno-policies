@@ -1,0 +1,104 @@
+---
+# The catalog's image-tag audit, on the ValidatingPolicy API, which Kyverno keeps after classic
+# ClusterPolicy validate rules are retired. Each policy below is one rule of the classic
+# `disallow-latest-tag` ClusterPolicy (disallow-latest-tag.yaml, kept unregistered as the
+# rollback form), with the same match scope, regular expression, message and Audit action.
+# tests/disallow-latest-tag-validating-policy holds them to the classic rules' results on the
+# classic fixtures.
+#
+# One policy per rule, not one policy with two validations: a ValidatingPolicy reports only
+# its first failing validation, so a Pod that both lacks a tag and uses :latest would report
+# one finding instead of two, and validationActions applies to a whole policy, so a consumer
+# could no longer promote one rule to Deny and keep the other in Audit.
+#
+# FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin. Autogen is off, as in the classic
+# policy (pod-policies.kyverno.io/autogen-controllers: none): without it Kyverno also
+# evaluates Deployments, StatefulSets and the other Pod controllers.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: require-image-tag
+  annotations:
+    policies.kyverno.io/title: Require Pinned Image References (ValidatingPolicy)
+    policies.kyverno.io/category: Best Practices, Supply Chain Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Audits Pod images that are pinned by neither an explicit tag nor a
+      digest, including normal, init, and ephemeral containers. A digest-only
+      reference (image@sha256:...) is immutable and passes. ValidatingPolicy
+      form of the require-image-tag rule of the classic disallow-latest-tag
+      policy.
+spec:
+  validationActions:
+    - Audit
+  autogen:
+    podControllers:
+      controllers: []
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  variables:
+    - name: images
+      expression: >-
+        object.spec.?ephemeralContainers.orValue([]).map(c, c.image)
+        + object.spec.?initContainers.orValue([]).map(c, c.image)
+        + object.spec.?containers.orValue([]).map(c, c.image)
+  validations:
+    - expression: >-
+        variables.images.all(image,
+        image.matches('^(.*/)?[^/:@]+:[^/:@]+(@[A-Za-z][A-Za-z0-9_+.-]*:[0-9a-fA-F]{32,})?$')
+        || image.matches('^(.*/)?[^/:@]+@[A-Za-z][A-Za-z0-9_+.-]*:[0-9a-fA-F]{32,}$'))
+      message: >-
+        Container images must be pinned by an explicit tag or a digest; a
+        bare name silently resolves to the mutable latest tag.
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Disallow the Latest Image Tag (ValidatingPolicy)
+    policies.kyverno.io/category: Best Practices, Supply Chain Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Audits Pod images that use the mutable latest tag, including normal,
+      init, and ephemeral containers, and including a latest tag paired with a
+      digest. ValidatingPolicy form of the disallow-latest-tag rule of the
+      classic disallow-latest-tag policy.
+spec:
+  validationActions:
+    - Audit
+  autogen:
+    podControllers:
+      controllers: []
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  variables:
+    - name: images
+      expression: >-
+        object.spec.?ephemeralContainers.orValue([]).map(c, c.image)
+        + object.spec.?initContainers.orValue([]).map(c, c.image)
+        + object.spec.?containers.orValue([]).map(c, c.image)
+  validations:
+    - expression: >-
+        variables.images.all(image,
+        !image.matches('^(.*/)?[^/:@]+:latest(@[A-Za-z][A-Za-z0-9_+.-]*:[0-9a-fA-F]{32,})?$'))
+      message: >-
+        The mutable latest tag is not allowed; use a versioned image tag.

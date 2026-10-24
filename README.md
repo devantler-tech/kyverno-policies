@@ -34,8 +34,8 @@ guide do not grant unrestricted reuse or redistribution rights.
 |---|---|---|
 | [`add-recommended-labels`](policies/best-practices/add-recommended-labels.yaml) | Adds missing Kubernetes identity labels to Deployments, StatefulSets, and DaemonSets without replacing authored values | Kyverno 1.18+ and admission processing that includes the target workload |
 | [`auto-vpa`](policies/best-practices/auto-vpa-generating-policy.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.19+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
-| [`disallow-latest-tag`](policies/best-practices/disallow-latest-tag.yaml) | Audits Pod images that are pinned by neither a tag nor a digest, or that use the mutable `:latest` tag | Kyverno 1.18+ and admission/background processing that includes Pods |
-| [`enforce-flux-best-practices`](policies/flux/enforce-flux-best-practices.yaml) | Validates reliability settings on Flux Kustomizations and HelmReleases | Kyverno 1.18+ and the Flux Kustomization v1 and HelmRelease v2 CRDs |
+| [`disallow-latest-tag`](policies/best-practices/disallow-latest-tag-validating-policy.yaml) | Audits Pod images that are pinned by neither a tag nor a digest, or that use the mutable `:latest` tag | Kyverno 1.19+ and admission/background processing that includes Pods |
+| [`enforce-flux-best-practices`](policies/flux/enforce-flux-best-practices-validating-policy.yaml) | Validates reliability settings on Flux Kustomizations and HelmReleases | Kyverno 1.19+ and the Flux Kustomization v1 and HelmRelease v2 CRDs |
 | [`helm-release-enable-tests`](policies/flux/helm-release-enable-tests.yaml) | Enables Helm test actions for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
 | [`helm-release-install-crds`](policies/flux/helm-release-install-crds.yaml) | Creates and replaces chart CRDs for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
 | [`helm-release-remediation-retries`](policies/flux/helm-release-remediation-retries.yaml) | Supplies safe install and upgrade remediation defaults for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
@@ -48,8 +48,12 @@ does not count as a tag. A versioned tag, a versioned tag-plus-digest reference,
 reference (the pin format the portfolio's `publish-app` workflow produces) all pass. References with
 neither a tag nor a digest fail; `:latest` references fail even when paired with a digest.
 
+The catalog ships it as two `ValidatingPolicy` objects, one per check: `require-image-tag` (a tag or a
+digest is present) and `disallow-latest-tag` (the tag is not `latest`). Each audits Pods only, not the
+Deployments and other controllers that create them.
+
 The shared policy deliberately contains no namespace exclusions. Consumers own any environment-specific
-exceptions and the separately validated decision to promote either rule beyond `Audit`. Kyverno's global
+exceptions and the separately validated decision to promote either check beyond `Audit`. Kyverno's global
 resource filters still win, so a filtered Pod remains unreachable by this policy.
 
 ## Recommended label behavior
@@ -194,12 +198,55 @@ resource to declare its reconciliation and remediation controls explicitly:
   least one remediation retry (`-1` for unlimited retries) or explicitly select Flux's
   `RetryOnFailure` strategy; upgrade remediation also enables `remediateLastFailure`.
 
-The shared policy deliberately has no environment-specific exclusions. Each validation rule uses the
-current per-rule `failureAction: Audit` field, so consumers own both their exclusions and the separately
-validated rollout to `Enforce`; the deprecated policy-level `validationFailureAction` field is not used.
-The fixtures prove both valid and invalid resources, including that a `flux-system/flux-system`
-Kustomization is not silently exempted by the reusable policy. They also prove that legacy HelmRelease
-beta objects and a nonmatching Flux source remain untouched.
+The catalog ships it as four `ValidatingPolicy` objects, one per check: `kustomization-recommended-settings`,
+`helmrelease-reconciliation-settings`, `helmrelease-install-failure-handling` and
+`helmrelease-upgrade-failure-handling`.
+
+The shared policy deliberately has no environment-specific exclusions. Each check sets
+`validationActions: [Audit]`, so consumers own both their exclusions and the separately validated
+rollout to `Deny`, which they can choose per check. The fixtures prove both valid and invalid resources,
+including that a `flux-system/flux-system` Kustomization is not silently exempted by the reusable policy.
+They also prove that legacy HelmRelease beta objects and a nonmatching Flux source remain untouched.
+
+## Migrating the validate policies to the ValidatingPolicy form
+
+Kyverno 1.19 deprecates classic `ClusterPolicy` and plans to remove it in 1.20, so the catalog registers
+the `ValidatingPolicy` form of `disallow-latest-tag` and `enforce-flux-best-practices`. The classic files,
+[`disallow-latest-tag.yaml`](policies/best-practices/disallow-latest-tag.yaml) and
+[`enforce-flux-best-practices.yaml`](policies/flux/enforce-flux-best-practices.yaml), stay in the
+repository unregistered as the rollback form and keep their own tests.
+
+Each classic rule became one `ValidatingPolicy` with the rule's name, match scope, check and message.
+The tests hold every one of them to its classic rule's result on the classic rule's fixtures. One policy
+per rule keeps two classic behaviours: a `ValidatingPolicy` reports only its first failing check, so one
+policy with several checks would report one finding where the classic policy reports one per rule, and
+`validationActions` applies to a whole policy, so it could not be `Deny` for one rule and `Audit` for
+another.
+
+What changes for a consumer:
+
+- **Reports.** A policy report result names the former rule as its `policy` and carries no `rule`; for
+  example `policy: require-image-tag` instead of `policy: disallow-latest-tag, rule: require-image-tag`.
+  Update any alert, dashboard or query that filters on the old names.
+- **Exclusions and enforcement.** Classic exclusions and `failureAction` patches do not apply to the new
+  kind. Patch each `ValidatingPolicy` instead: `spec.validationActions` for `Deny`, and
+  `spec.matchConstraints` (`namespaceSelector`, `excludeResourceRules`) or `spec.matchConditions` for
+  exclusions. A classic `kyverno.io` `PolicyException` does not cover the new kind; use a
+  `policies.kyverno.io/v1` `PolicyException` whose `policyRefs` name the `ValidatingPolicy`.
+- **Existing resources.** Each policy sets `evaluation.background.enabled: true`, the field Kyverno uses
+  to apply a `ValidatingPolicy` to existing resources during a background scan, as the classic policies'
+  `background: true` does.
+
+**Rollout, per cluster:**
+
+1. Confirm the cluster runs Kyverno 1.19.0 or later.
+2. Reference the `ValidatingPolicy` files and move your exclusions and any `Deny` choice onto them as
+   patches. While both forms are applied, every finding is reported twice, once under each form's names.
+3. Check that the new policies report the findings the classic policies reported, then remove the classic
+   policies.
+
+**Rollback** is the same steps in reverse: re-reference the classic file in this catalog (or your own
+copy) with your classic patches, then remove the `ValidatingPolicy` objects.
 
 ## Helm test opt-in behavior
 

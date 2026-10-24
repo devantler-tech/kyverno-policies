@@ -1,4 +1,8 @@
 ---
+# Classic form, kept unregistered as the rollback for disallow-latest-tag-validating-policy.yaml,
+# the form the catalog registers. Applied together, the two forms report every finding twice;
+# the README section "Migrating the validate policies to the ValidatingPolicy form" is the switch
+# and rollback procedure.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
