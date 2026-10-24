@@ -1,0 +1,21 @@
+---
+# yamllint disable rule:line-length
+# The workload and VPA names below are longer than the line limit on purpose.
+# A 253-character StatefulSet name whose cut lands on a dot. The VPA name drops the dot, so it
+# stays a valid DNS subdomain, and adds a hash of the full name before the suffix. One Test per
+# case, because GeneratingPolicy results expand across every resource in a Test.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: auto-vpa-generating-policy-long-name-statefulset
+policies:
+  - ../../policies/best-practices/auto-vpa-generating-policy.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: auto-vpa-statefulset
+    resources:
+      - test/sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss.ttttttttttttttttttttttt
+    generatedResource: generated-vpa.yaml
+    kind: StatefulSet
+    result: pass

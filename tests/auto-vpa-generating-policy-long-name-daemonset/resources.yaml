@@ -1,0 +1,22 @@
+---
+# yamllint disable rule:line-length
+# The workload and VPA names below are longer than the line limit on purpose.
+# A 253-character DaemonSet name. The VPA name is a truncated prefix, a hash of the full name and
+# the suffix: 253 characters in all.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+  namespace: test
+spec:
+  selector:
+    matchLabels:
+      app: node-agent
+  template:
+    metadata:
+      labels:
+        app: node-agent
+    spec:
+      containers:
+        - name: node-agent
+          image: registry.k8s.io/pause:3.10

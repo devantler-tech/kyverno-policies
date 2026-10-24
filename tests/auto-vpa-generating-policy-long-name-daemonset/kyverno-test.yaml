@@ -1,0 +1,21 @@
+---
+# yamllint disable rule:line-length
+# The workload and VPA names below are longer than the line limit on purpose.
+# A 253-character DaemonSet name. The VPA name is a truncated prefix, a hash of the full name and
+# the suffix: 253 characters in all. One Test per case, because GeneratingPolicy results expand
+# across every resource in a Test.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: auto-vpa-generating-policy-long-name-daemonset
+policies:
+  - ../../policies/best-practices/auto-vpa-generating-policy.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: auto-vpa-daemonset
+    resources:
+      - test/ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+    generatedResource: generated-vpa.yaml
+    kind: DaemonSet
+    result: pass

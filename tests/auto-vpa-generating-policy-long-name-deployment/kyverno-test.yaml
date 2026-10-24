@@ -1,0 +1,22 @@
+---
+# yamllint disable rule:line-length
+# The workload and VPA names below are longer than the line limit on purpose.
+# A 253-character Deployment name, the longest allowed. The VPA name keeps a truncated prefix,
+# drops the separator the cut leaves at its end, and adds a hash of the full name before the
+# suffix. One Test per case, because GeneratingPolicy results expand across every resource in a
+# Test.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: auto-vpa-generating-policy-long-name-deployment
+policies:
+  - ../../policies/best-practices/auto-vpa-generating-policy.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: auto-vpa-deployment
+    resources:
+      - test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbb
+    generatedResource: generated-vpa.yaml
+    kind: Deployment
+    result: pass
