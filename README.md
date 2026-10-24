@@ -106,11 +106,13 @@ Important operating constraints:
   container-level recommendation can prevent replacement pods from being admitted.
 - Generated VPA names are suffixed with the workload kind (`<name>-deployment`, `<name>-statefulset`,
   `<name>-daemonset`) so a Deployment, StatefulSet, and DaemonSet that legally share one name in a
-  namespace each get their own VPA instead of contending for one. The suffix adds up to 12 characters,
-  so a workload whose name exceeds 241 characters would generate a VPA name past the 253-character
-  DNS-subdomain limit and receive none; keep workload names within that bound (any real workload name is
-  far shorter). Consumers adopting this from an earlier workload-name-only version must clean up the
-  previously generated `<name>` VPAs, which the new rules no longer manage (migration/cleanup tracked in
+  namespace each get their own VPA instead of contending for one. When the suffixed name would be longer
+  than 253 characters, the workload part is shortened and a 10-digit hash of the full workload name is added
+  after the suffix, so every workload still gets a valid VPA and two long names sharing a prefix get
+  different ones. A shortened name ends in hex digits and a name that fits ends in the kind, so the two
+  can never collide. Names that fit are unchanged. Consumers adopting this from an earlier workload-name-only
+  version must clean up the previously generated `<name>` VPAs, which the new rules no longer manage
+  (migration/cleanup tracked in
   [issue #2](https://github.com/devantler-tech/kyverno-policies/issues/2)).
 - The auto-vpa form needs **Kyverno 1.19 or later**. On 1.18.x, `generateExisting` is accepted but does
   nothing for workloads that already exist
@@ -121,8 +123,10 @@ Important operating constraints:
 ### Migrating to the GeneratingPolicy form
 
 The catalog ships only the `GeneratingPolicy` form of auto-vpa. Its tests hold it to the classic
-policy's recorded output (`tests/auto-vpa/generated-*-vpa.yaml`), so the VPAs it generates are identical
-to those of a classic auto-vpa `ClusterPolicy`. The last catalog revision that still carries the classic
+policy's recorded output (`tests/auto-vpa/generated-*-vpa.yaml`), so for every workload whose suffixed name
+fits in 253 characters the VPA it generates is identical to that of a classic auto-vpa `ClusterPolicy`.
+A longer-named workload gets no VPA from the classic form, whose name would be longer than 253
+characters, and a shortened name from this one. The last catalog revision that still carries the classic
 form is
 [`44ed118`](https://github.com/devantler-tech/kyverno-policies/blob/44ed11893f4b56cdc5634159a278407ada1bf70e/policies/best-practices/auto-vpa.yaml);
 pin it if you need the classic file, or keep your own copy as both current consumers do.

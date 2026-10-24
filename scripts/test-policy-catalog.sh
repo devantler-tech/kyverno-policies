@@ -801,7 +801,8 @@ fi
 
 ported_positive_dir="$(mktemp -d)"
 ported_negative_dir="$(mktemp -d)"
-trap 'rm -rf "${ported_positive_dir}" "${ported_negative_dir}"' EXIT
+ported_collision_dir="$(mktemp -d)"
+trap 'rm -rf "${ported_positive_dir}" "${ported_negative_dir}" "${ported_collision_dir}"' EXIT
 
 # A matched/unmatched control pair for the auto-vpa policies.
 # The positive control comes FIRST because it is what gives the negative control teeth:
@@ -826,5 +827,27 @@ kyverno apply "${ported_vpa_policy}" \
 
 if find "${ported_negative_dir}" -type f -print -quit | grep -q .; then
   echo "FAIL: ported auto-vpa generated a resource for an unmatched Job" >&2
+  exit 1
+fi
+
+# A shortened VPA name must never equal the unshortened name another workload of the same kind
+# can legally get, or the two contend for one VPA and one stays unsized (issue #49). For each
+# kind the fixture holds a 253-character workload and a workload named like a shortened VPA
+# name without its kind suffix: six workloads that must get six valid, different VPA names.
+kyverno apply "${ported_vpa_policy}" \
+  --resource "${repo_root}/tests/auto-vpa/long-name-collision.yaml" \
+  --output "${ported_collision_dir}" \
+  --remove-color >/dev/null
+
+collision_vpa_names="$(
+  find "${ported_collision_dir}" -type f -exec \
+    yq --no-doc 'select(.kind == "VerticalPodAutoscaler") | .metadata.name' {} +
+)"
+collision_vpa_count="$(printf '%s\n' "${collision_vpa_names}" | awk 'NF {n++} END {print n + 0}')"
+collision_unique_count="$(printf '%s\n' "${collision_vpa_names}" | awk 'NF' | sort -u | awk 'END {print NR}')"
+collision_overlong_count="$(printf '%s\n' "${collision_vpa_names}" | awk 'length > 253 {n++} END {print n + 0}')"
+
+if [[ "${collision_vpa_count}" -ne 6 || "${collision_unique_count}" -ne 6 || "${collision_overlong_count}" -ne 0 ]]; then
+  echo "FAIL: ported auto-vpa must give six long-name workloads six valid, different VPA names (got ${collision_unique_count} different of ${collision_vpa_count}, ${collision_overlong_count} too long)" >&2
   exit 1
 fi
