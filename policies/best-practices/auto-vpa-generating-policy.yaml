@@ -1,7 +1,9 @@
 ---
 # The catalog's auto-vpa, on the GeneratingPolicy API, which Kyverno keeps after classic
-# ClusterPolicy generate rules are retired. It generates the same VerticalPodAutoscalers as
-# the classic `auto-vpa` ClusterPolicy, whose output tests/auto-vpa/generated-*-vpa.yaml pins.
+# ClusterPolicy generate rules are retired. For every workload whose VPA name fits, it generates
+# the same VerticalPodAutoscaler as the classic `auto-vpa` ClusterPolicy, whose output
+# tests/auto-vpa/generated-*-vpa.yaml pins. A longer-named workload, which the classic form
+# cannot size, gets a shortened name (see vpaName below).
 #
 # This is the only auto-vpa form the catalog ships. Never apply it to a cluster that still
 # runs a classic auto-vpa ClusterPolicy, because both generate a VerticalPodAutoscaler for
