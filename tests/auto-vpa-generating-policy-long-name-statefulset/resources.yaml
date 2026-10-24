@@ -2,7 +2,7 @@
 # yamllint disable rule:line-length
 # The workload and VPA names below are longer than the line limit on purpose.
 # A 253-character StatefulSet name whose cut lands on a dot. The VPA name drops the dot, so it
-# stays a valid DNS subdomain, and adds a hash of the full name before the suffix.
+# stays a valid DNS subdomain, and ends with the suffix and a hash of the full name.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:

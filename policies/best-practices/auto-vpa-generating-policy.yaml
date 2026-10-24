@@ -47,9 +47,11 @@ spec:
         resources: ["deployments"]
   # A VPA name, like the workload name, may be at most 253 characters. A name that fits is
   # <workload>-deployment. A longer one keeps as much of the workload name as fits, drops a
-  # trailing "-" or "." the cut leaves (so it stays a valid DNS subdomain), and adds the
-  # first 10 hex digits of the full name's SHA-256, so two long names that share a prefix
-  # still get different VPAs. The 11 in the cut is that "-" plus the 10 hash digits.
+  # trailing "-" or "." the cut leaves (so it stays a valid DNS subdomain), and ends with
+  # -deployment- and the first 10 hex digits of the full name's SHA-256, so two long names that
+  # share a prefix still get different VPAs. The hash goes last because a name that fits
+  # always ends in "deployment", which is not hex, so a shortened name never equals the name
+  # another workload gets unshortened. The 11 in the cut is that "-" plus the 10 hash digits.
   variables:
     - name: workload
       expression: string(object.metadata.name)
@@ -58,7 +60,7 @@ spec:
         size(variables.workload) + size("-deployment") <= 253
         ? variables.workload + "-deployment"
         : variables.workload.substring(0, 253 - 11 - size("-deployment")).find("^.*[a-z0-9]")
-          + "-" + sha256(variables.workload).substring(0, 10) + "-deployment"
+          + "-deployment-" + sha256(variables.workload).substring(0, 10)
   generate:
     # Every value is dyn(): CEL infers a map's value type from its first entry, so a
     # resource literal mixing strings with nested maps fails to compile without it.
@@ -127,9 +129,11 @@ spec:
         resources: ["statefulsets"]
   # A VPA name, like the workload name, may be at most 253 characters. A name that fits is
   # <workload>-statefulset. A longer one keeps as much of the workload name as fits, drops a
-  # trailing "-" or "." the cut leaves (so it stays a valid DNS subdomain), and adds the
-  # first 10 hex digits of the full name's SHA-256, so two long names that share a prefix
-  # still get different VPAs. The 11 in the cut is that "-" plus the 10 hash digits.
+  # trailing "-" or "." the cut leaves (so it stays a valid DNS subdomain), and ends with
+  # -statefulset- and the first 10 hex digits of the full name's SHA-256, so two long names that
+  # share a prefix still get different VPAs. The hash goes last because a name that fits
+  # always ends in "statefulset", which is not hex, so a shortened name never equals the name
+  # another workload gets unshortened. The 11 in the cut is that "-" plus the 10 hash digits.
   variables:
     - name: workload
       expression: string(object.metadata.name)
@@ -138,7 +142,7 @@ spec:
         size(variables.workload) + size("-statefulset") <= 253
         ? variables.workload + "-statefulset"
         : variables.workload.substring(0, 253 - 11 - size("-statefulset")).find("^.*[a-z0-9]")
-          + "-" + sha256(variables.workload).substring(0, 10) + "-statefulset"
+          + "-statefulset-" + sha256(variables.workload).substring(0, 10)
   generate:
     - expression: >-
         generator.Apply(
@@ -204,9 +208,11 @@ spec:
         resources: ["daemonsets"]
   # A VPA name, like the workload name, may be at most 253 characters. A name that fits is
   # <workload>-daemonset. A longer one keeps as much of the workload name as fits, drops a
-  # trailing "-" or "." the cut leaves (so it stays a valid DNS subdomain), and adds the
-  # first 10 hex digits of the full name's SHA-256, so two long names that share a prefix
-  # still get different VPAs. The 11 in the cut is that "-" plus the 10 hash digits.
+  # trailing "-" or "." the cut leaves (so it stays a valid DNS subdomain), and ends with
+  # -daemonset- and the first 10 hex digits of the full name's SHA-256, so two long names that
+  # share a prefix still get different VPAs. The hash goes last because a name that fits
+  # always ends in "daemonset", which is not hex, so a shortened name never equals the name
+  # another workload gets unshortened. The 11 in the cut is that "-" plus the 10 hash digits.
   variables:
     - name: workload
       expression: string(object.metadata.name)
@@ -215,7 +221,7 @@ spec:
         size(variables.workload) + size("-daemonset") <= 253
         ? variables.workload + "-daemonset"
         : variables.workload.substring(0, 253 - 11 - size("-daemonset")).find("^.*[a-z0-9]")
-          + "-" + sha256(variables.workload).substring(0, 10) + "-daemonset"
+          + "-daemonset-" + sha256(variables.workload).substring(0, 10)
   generate:
     - expression: >-
         generator.Apply(

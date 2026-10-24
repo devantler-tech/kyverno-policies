@@ -108,8 +108,9 @@ Important operating constraints:
   `<name>-daemonset`) so a Deployment, StatefulSet, and DaemonSet that legally share one name in a
   namespace each get their own VPA instead of contending for one. When the suffixed name would pass the
   253-character limit, the workload part is shortened and a 10-digit hash of the full workload name is added
-  before the suffix, so every workload still gets a valid VPA and two long names sharing a prefix get
-  different ones. Names that fit are unchanged. Consumers adopting this from an earlier workload-name-only
+  after the suffix, so every workload still gets a valid VPA and two long names sharing a prefix get
+  different ones. A shortened name ends in hex digits and a name that fits ends in the kind, so the two
+  can never collide. Names that fit are unchanged. Consumers adopting this from an earlier workload-name-only
   version must clean up the previously generated `<name>` VPAs, which the new rules no longer manage
   (migration/cleanup tracked in
   [issue #2](https://github.com/devantler-tech/kyverno-policies/issues/2)).

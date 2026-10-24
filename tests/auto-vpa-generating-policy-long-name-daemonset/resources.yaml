@@ -1,8 +1,8 @@
 ---
 # yamllint disable rule:line-length
 # The workload and VPA names below are longer than the line limit on purpose.
-# A 253-character DaemonSet name. The VPA name is a truncated prefix, a hash of the full name and
-# the suffix: 253 characters in all.
+# A 253-character DaemonSet name. The VPA name is a truncated prefix, the suffix and a hash of the
+# full name: 253 characters in all.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
