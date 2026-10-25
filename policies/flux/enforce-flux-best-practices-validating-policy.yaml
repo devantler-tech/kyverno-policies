@@ -1,0 +1,169 @@
+---
+# The catalog's Flux reliability baseline, on the ValidatingPolicy API, which Kyverno keeps
+# after classic ClusterPolicy validate rules are retired. Each policy below is one rule of the
+# classic `enforce-flux-best-practices` ClusterPolicy (enforce-flux-best-practices.yaml, kept
+# unregistered as the rollback form), with the same matched API, required settings, message
+# and Audit action. tests/enforce-flux-best-practices-validating-policy holds them to the
+# classic rules' results on the classic fixtures.
+#
+# One policy per rule, not one policy with four validations: a ValidatingPolicy reports only
+# its first failing validation, matchConstraints applies to a whole policy (one rule matches
+# Kustomizations, three match HelmReleases), and validationActions applies to a whole policy,
+# so a consumer could no longer promote one rule to Deny and keep the others in Audit.
+#
+# Each classic `pattern` value "?*" (a non-empty value) becomes `!= ''`, and each
+# "retries: >=1 | -1" becomes `>= 1 || == -1`. A missing field reads as the value that fails
+# the check, as a missing field fails the classic pattern.
+#
+# FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: kustomization-recommended-settings
+  annotations:
+    policies.kyverno.io/title: Flux Kustomization Recommended Settings (ValidatingPolicy)
+    policies.kyverno.io/category: Flux, Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Kustomization
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Audits Flux Kustomizations that do not set an interval, timeout and
+      retryInterval, enable prune and wait, and name their source reference.
+      ValidatingPolicy form of the kustomization-recommended-settings rule of
+      the classic enforce-flux-best-practices policy.
+spec:
+  validationActions:
+    - Audit
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["kustomize.toolkit.fluxcd.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["kustomizations"]
+  validations:
+    - expression: >-
+        object.?spec.?interval.orValue('') != ''
+        && object.?spec.?timeout.orValue('') != ''
+        && object.?spec.?retryInterval.orValue('') != ''
+        && object.?spec.?prune.orValue(false) == true
+        && object.?spec.?wait.orValue(false) == true
+        && object.?spec.?sourceRef.?kind.orValue('') != ''
+        && object.?spec.?sourceRef.?name.orValue('') != ''
+      message: >-
+        Flux Kustomization must set spec.interval, spec.timeout,
+        spec.retryInterval, spec.prune: true, spec.wait: true, and a
+        spec.sourceRef kind and name.
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: helmrelease-reconciliation-settings
+  annotations:
+    policies.kyverno.io/title: Flux HelmRelease Reconciliation Settings (ValidatingPolicy)
+    policies.kyverno.io/category: Flux, Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: HelmRelease
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Audits Flux HelmReleases that do not set an interval and a timeout.
+      ValidatingPolicy form of the helmrelease-reconciliation-settings rule of
+      the classic enforce-flux-best-practices policy.
+spec:
+  validationActions:
+    - Audit
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["helm.toolkit.fluxcd.io"]
+        apiVersions: ["v2"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["helmreleases"]
+  validations:
+    - expression: >-
+        object.?spec.?interval.orValue('') != ''
+        && object.?spec.?timeout.orValue('') != ''
+      message: >-
+        Flux HelmRelease must set spec.interval and spec.timeout.
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: helmrelease-install-failure-handling
+  annotations:
+    policies.kyverno.io/title: Flux HelmRelease Install Failure Handling (ValidatingPolicy)
+    policies.kyverno.io/category: Flux, Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: HelmRelease
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Audits Flux HelmReleases whose install neither retries remediation at
+      least once (or without limit) nor uses the RetryOnFailure strategy.
+      ValidatingPolicy form of the helmrelease-install-failure-handling rule
+      of the classic enforce-flux-best-practices policy.
+spec:
+  validationActions:
+    - Audit
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["helm.toolkit.fluxcd.io"]
+        apiVersions: ["v2"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["helmreleases"]
+  variables:
+    - name: retries
+      expression: object.?spec.?install.?remediation.?retries.orValue(0)
+  validations:
+    - expression: >-
+        variables.retries >= 1 || variables.retries == -1
+        || object.?spec.?install.?strategy.?name.orValue('') == 'RetryOnFailure'
+      message: >-
+        Flux HelmRelease must configure install remediation retries or use
+        the RetryOnFailure install strategy.
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: helmrelease-upgrade-failure-handling
+  annotations:
+    policies.kyverno.io/title: Flux HelmRelease Upgrade Failure Handling (ValidatingPolicy)
+    policies.kyverno.io/category: Flux, Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: HelmRelease
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Audits Flux HelmReleases whose upgrade neither retries remediation at
+      least once (or without limit) with last-failure remediation nor uses the
+      RetryOnFailure strategy. ValidatingPolicy form of the
+      helmrelease-upgrade-failure-handling rule of the classic
+      enforce-flux-best-practices policy.
+spec:
+  validationActions:
+    - Audit
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["helm.toolkit.fluxcd.io"]
+        apiVersions: ["v2"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["helmreleases"]
+  variables:
+    - name: retries
+      expression: object.?spec.?upgrade.?remediation.?retries.orValue(0)
+  validations:
+    - expression: >-
+        ((variables.retries >= 1 || variables.retries == -1)
+        && object.?spec.?upgrade.?remediation.?remediateLastFailure.orValue(false) == true)
+        || object.?spec.?upgrade.?strategy.?name.orValue('') == 'RetryOnFailure'
+      message: >-
+        Flux HelmRelease must configure upgrade remediation retries with
+        last-failure remediation or use the RetryOnFailure upgrade strategy.

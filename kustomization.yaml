@@ -4,8 +4,8 @@ kind: Kustomization
 resources:
   - policies/best-practices/add-recommended-labels.yaml
   - policies/best-practices/auto-vpa-generating-policy.yaml
-  - policies/best-practices/disallow-latest-tag.yaml
-  - policies/flux/enforce-flux-best-practices.yaml
+  - policies/best-practices/disallow-latest-tag-validating-policy.yaml
+  - policies/flux/enforce-flux-best-practices-validating-policy.yaml
   - policies/flux/helm-release-enable-tests.yaml
   - policies/flux/helm-release-install-crds.yaml
   - policies/flux/helm-release-remediation-retries.yaml

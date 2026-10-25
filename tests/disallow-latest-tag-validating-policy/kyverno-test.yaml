@@ -1,0 +1,62 @@
+---
+# Parity spec for the ValidatingPolicy port of disallow-latest-tag.
+#
+# Each results[] block below repeats the classic rule's block in
+# ../disallow-latest-tag/kyverno-test.yaml, against the same fixture file, with the rule
+# name as the policy name. Sharing the classic fixtures is the parity claim: an input set
+# authored next to the new policy could drift with it and prove nothing.
+#
+# The classic test's `skip` rows for the non-Pod Deployment have no equivalent here: the CLI
+# reports a resource a ValidatingPolicy does not match as "Not found", not as a skip. That
+# control lives in scripts/test-policy-catalog.sh instead, after a positive control.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: disallow-latest-tag-validating-policy-matches-classic-results
+policies:
+  - ../../policies/best-practices/disallow-latest-tag-validating-policy.yaml
+resources:
+  - ../disallow-latest-tag/resources.yaml
+results:
+  - policy: require-image-tag
+    isValidatingPolicy: true
+    resources:
+      - apps/tagged-images
+      - apps/tag-and-digest
+      - apps/tag-and-sha512-digest
+      - apps/digest-only-image
+      - apps/sha512-digest-only-image
+      - apps/latest-and-digest
+      - apps/latest-image
+      - apps/latest-init-image
+      - apps/latest-ephemeral-image
+    result: pass
+  - policy: require-image-tag
+    isValidatingPolicy: true
+    resources:
+      - apps/tagless-image
+      - apps/registry-port-tagless-image
+      - apps/tagless-init-image
+      - apps/tagless-ephemeral-image
+    result: fail
+  - policy: disallow-latest-tag
+    isValidatingPolicy: true
+    resources:
+      - apps/tagged-images
+      - apps/tag-and-digest
+      - apps/tag-and-sha512-digest
+      - apps/tagless-image
+      - apps/digest-only-image
+      - apps/sha512-digest-only-image
+      - apps/registry-port-tagless-image
+      - apps/tagless-init-image
+      - apps/tagless-ephemeral-image
+    result: pass
+  - policy: disallow-latest-tag
+    isValidatingPolicy: true
+    resources:
+      - apps/latest-image
+      - apps/latest-and-digest
+      - apps/latest-init-image
+      - apps/latest-ephemeral-image
+    result: fail

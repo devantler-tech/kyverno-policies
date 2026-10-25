@@ -1,0 +1,79 @@
+---
+# Parity spec for the ValidatingPolicy port of enforce-flux-best-practices.
+#
+# Each pass/fail block below repeats the classic rule's block in
+# ../enforce-flux-best-practices/kyverno-test.yaml, against the same fixture file, with the
+# rule name as the policy name. Sharing the classic fixtures is the parity claim: an input set
+# authored next to the new policies could drift with them and prove nothing.
+#
+# The classic test's `skip` rows (legacy HelmRelease beta objects and a GitRepository) have no
+# equivalent here: the CLI reports a resource a ValidatingPolicy does not match as
+# "Not found", not as a skip. That control lives in scripts/test-policy-catalog.sh instead,
+# after a positive control.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: enforce-flux-best-practices-validating-policy-matches-classic-results
+policies:
+  - ../../policies/flux/enforce-flux-best-practices-validating-policy.yaml
+resources:
+  - ../enforce-flux-best-practices/resources.yaml
+results:
+  - policy: kustomization-recommended-settings
+    isValidatingPolicy: true
+    resources:
+      - apps/valid-kustomization
+    result: pass
+  - policy: kustomization-recommended-settings
+    isValidatingPolicy: true
+    resources:
+      - apps/missing-kustomization-interval
+      - apps/missing-kustomization-timeout
+      - apps/missing-kustomization-retry-interval
+      - apps/false-kustomization-prune
+      - apps/false-kustomization-wait
+      - apps/missing-kustomization-source-kind
+      - apps/missing-kustomization-source-name
+      - flux-system/flux-system
+    result: fail
+  - policy: helmrelease-reconciliation-settings
+    isValidatingPolicy: true
+    resources:
+      - apps/valid-finite-remediation
+      - apps/valid-infinite-remediation
+      - apps/valid-retry-on-failure
+    result: pass
+  - policy: helmrelease-reconciliation-settings
+    isValidatingPolicy: true
+    resources:
+      - apps/missing-helmrelease-interval
+      - apps/missing-helmrelease-timeout
+    result: fail
+  - policy: helmrelease-install-failure-handling
+    isValidatingPolicy: true
+    resources:
+      - apps/valid-finite-remediation
+      - apps/valid-infinite-remediation
+      - apps/valid-retry-on-failure
+    result: pass
+  - policy: helmrelease-install-failure-handling
+    isValidatingPolicy: true
+    resources:
+      - apps/zero-install-remediation
+      - apps/noncanonical-negative-install-remediation
+      - apps/missing-install-failure-handling
+    result: fail
+  - policy: helmrelease-upgrade-failure-handling
+    isValidatingPolicy: true
+    resources:
+      - apps/valid-finite-remediation
+      - apps/valid-infinite-remediation
+      - apps/valid-retry-on-failure
+    result: pass
+  - policy: helmrelease-upgrade-failure-handling
+    isValidatingPolicy: true
+    resources:
+      - apps/zero-upgrade-remediation
+      - apps/disabled-last-failure-remediation
+      - apps/missing-upgrade-failure-handling
+    result: fail

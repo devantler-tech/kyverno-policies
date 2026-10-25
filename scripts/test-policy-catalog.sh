@@ -137,15 +137,17 @@ assert_equal "$(yq '[.. | select(tag == "!!map") | select(has("exclude"))] | len
 assert_equal "$(yq '[.spec.rules[] | select(has("mutate") or has("generate"))] | length' \
   "${image_tag_policy}")" "0" \
   "shared image-tag policy must validate without mutating or generating resources"
+# The classic file is the unregistered rollback for the ValidatingPolicy form (issue #43),
+# whose checks follow the Flux ones below.
 assert_equal "$(yq '[.resources[] |
   select(. == "policies/best-practices/disallow-latest-tag.yaml")
-] | length' "${repo_root}/kustomization.yaml")" "1" \
-  "shared image-tag policy must be registered exactly once"
+] | length' "${repo_root}/kustomization.yaml")" "0" \
+  "the classic image-tag ClusterPolicy must not be registered beside its ValidatingPolicy form"
 
 if ! grep -Fq \
   'policies/best-practices/disallow-latest-tag.yaml' \
   "${repo_root}/README.md"; then
-  echo "FAIL: README catalog is missing disallow-latest-tag" >&2
+  echo "FAIL: README is missing the classic disallow-latest-tag rollback" >&2
   exit 1
 fi
 
@@ -702,6 +704,128 @@ if [[ "${flux_legacy_helmrelease_match_count}" -ne 0 ]]; then
   echo "FAIL: shared Flux policy must not match unserved HelmRelease beta APIs" >&2
   exit 1
 fi
+
+assert_equal "$(yq '[.resources[] |
+  select(. == "policies/flux/enforce-flux-best-practices.yaml")
+] | length' "${repo_root}/kustomization.yaml")" "0" \
+  "the classic Flux ClusterPolicy must not be registered beside its ValidatingPolicy form"
+
+# ValidatingPolicy forms of the two classic validate policies (issue #43). Each classic rule
+# becomes one ValidatingPolicy named after the rule, so a consumer can set Audit or Deny per
+# rule, as it can per classic rule. The classic files stay in the repository, unregistered, as
+# the rollback form, and keep their own behavior tests.
+#
+# `kyverno apply` prints one result per policy, rule and matched resource. The parity check
+# below compares the classic form's results with the ValidatingPolicy form's on the classic
+# fixtures, so every fixture resource, including the ones neither form matches, gets the same
+# result from each ValidatingPolicy as from the classic rule of the same name. It is also the
+# positive control: a policy file the CLI cannot load yields no results rather than an error.
+cel_image_tag_policy="${repo_root}/policies/best-practices/disallow-latest-tag-validating-policy.yaml"
+cel_flux_policy="${repo_root}/policies/flux/enforce-flux-best-practices-validating-policy.yaml"
+
+# Prints "<identity> <namespace>/<name> <result>" for every result, sorted, where identity
+# is the result's rule (classic) or policy (ValidatingPolicy) name.
+report_results() {
+  local policy_file="$1"
+  local resource_file="$2"
+  local identity="$3"
+  local report
+  local status=0
+
+  # Exit 1 means a fixture failed a rule, which the fixtures do on purpose. Any other
+  # non-zero status is a CLI failure.
+  report="$(kyverno apply "${policy_file}" --resource "${resource_file}" \
+    --policy-report --remove-color)" || status=$?
+  if [[ "${status}" -gt 1 ]]; then
+    echo "FAIL: kyverno apply ${policy_file} exited ${status}" >&2
+    exit 1
+  fi
+
+  # The CLI prints a deprecation warning for a classic policy before the report.
+  printf '%s\n' "${report}" | sed -n '/^apiVersion:/,$p' |
+    IDENTITY="${identity}" yq '.results[] |
+      .[env(IDENTITY)] + " " + (.resources[0].namespace // "") + "/" + .resources[0].name + " " + .result' |
+    sort
+}
+
+assert_cel_port() {
+  local label="$1"
+  local classic_file="$2"
+  local cel_file="$3"
+  local resource_file="$4"
+  local catalog_path="${cel_file#"${repo_root}/"}"
+  local classic_results
+  local cel_results
+
+  if [[ ! -f "${cel_file}" ]]; then
+    echo "FAIL: shared catalog is missing ${catalog_path}" >&2
+    exit 1
+  fi
+
+  assert_equal "$(yq --no-doc '.apiVersion + " " + .kind' "${cel_file}" | sort -u)" \
+    "policies.kyverno.io/v1 ValidatingPolicy" \
+    "every ${label} policy must be a policies.kyverno.io/v1 ValidatingPolicy"
+  assert_equal "$(yq --no-doc '.metadata.name' "${cel_file}" | sort | paste -sd, -)" \
+    "$(yq '.spec.rules[].name' "${classic_file}" | sort | paste -sd, -)" \
+    "the ${label} ValidatingPolicies must be named after the classic rules, one per rule"
+  assert_equal "$(yq --no-doc '.metadata.annotations."policies.kyverno.io/minversion"' \
+    "${cel_file}" | sort -u)" "1.19.0" \
+    "every ${label} ValidatingPolicy must declare the Kyverno 1.19.0 floor"
+  assert_equal "$(yq --no-doc '.spec.validationActions | join(",")' "${cel_file}" | sort -u)" \
+    "Audit" \
+    "every ${label} ValidatingPolicy must default to Audit only"
+  assert_equal "$(yq --no-doc '.spec.evaluation.background.enabled' "${cel_file}" | sort -u)" \
+    "true" \
+    "every ${label} ValidatingPolicy must evaluate existing resources"
+  assert_equal "$(yq --no-doc '.spec.validations | length' "${cel_file}" | sort -u)" "1" \
+    "every ${label} ValidatingPolicy must carry exactly one validation"
+  assert_equal "$(yq --no-doc '.spec.matchConstraints.resourceRules[].operations | join(",")' \
+    "${cel_file}" | sort -u)" "CREATE,UPDATE" \
+    "every ${label} ValidatingPolicy must match create and update requests"
+  assert_equal "$(yq --no-doc '[.. | select(tag == "!!map") | select(
+    has("matchConditions") or has("excludeResourceRules") or
+    has("namespaceSelector") or has("objectSelector")
+  )] | length' "${cel_file}" | sort -u)" "0" \
+    "the ${label} ValidatingPolicies must leave environment exclusions to consumers"
+  assert_equal "$(yq --no-doc '.metadata.name + ": " + .spec.validations[0].message' \
+    "${cel_file}" | sort)" \
+    "$(yq '.spec.rules[] | .name + ": " + .validate.message' "${classic_file}" | sort)" \
+    "every ${label} ValidatingPolicy must keep its classic rule's message"
+  assert_equal "$(CATALOG_PATH="${catalog_path}" yq '[.resources[] |
+    select(. == env(CATALOG_PATH))] | length' "${repo_root}/kustomization.yaml")" "1" \
+    "the ${label} ValidatingPolicies must be registered exactly once"
+
+  if ! grep -Fq "${catalog_path}" "${repo_root}/README.md"; then
+    echo "FAIL: README catalog is missing ${catalog_path}" >&2
+    exit 1
+  fi
+
+  classic_results="$(report_results "${classic_file}" "${resource_file}" rule)"
+  cel_results="$(report_results "${cel_file}" "${resource_file}" policy)"
+
+  if [[ -z "${classic_results}" ]]; then
+    echo "FAIL: the classic ${label} policy produced no results to compare against" >&2
+    exit 1
+  fi
+
+  if [[ "${cel_results}" != "${classic_results}" ]]; then
+    echo "FAIL: the ${label} ValidatingPolicies differ from the classic rules on the classic fixtures:" >&2
+    diff <(printf '%s\n' "${classic_results}") <(printf '%s\n' "${cel_results}") >&2 || true
+    exit 1
+  fi
+}
+
+assert_cel_port "image-tag" "${image_tag_policy}" "${cel_image_tag_policy}" \
+  "${repo_root}/tests/disallow-latest-tag/resources.yaml"
+assert_cel_port "Flux best-practices" "${flux_policy}" "${cel_flux_policy}" \
+  "${repo_root}/tests/enforce-flux-best-practices/resources.yaml"
+
+# The classic image-tag policy turns autogen off, so Kyverno evaluates Pods only and not the
+# Deployments and other controllers that create them. A ValidatingPolicy autogenerates for
+# Pod controllers unless its controller list is set and empty.
+assert_equal "$(yq --no-doc '.spec.autogen.podControllers.controllers | (tag) + " " + (length | tostring)' \
+  "${cel_image_tag_policy}" | sort -u)" "!!seq 0" \
+  "every image-tag ValidatingPolicy must disable Pod-controller autogen"
 
 # The GeneratingPolicy auto-vpa and a classic auto-vpa ClusterPolicy generate a
 # VerticalPodAutoscaler under the SAME name for the SAME workload, so two registered forms
