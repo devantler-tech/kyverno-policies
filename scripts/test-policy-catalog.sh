@@ -974,6 +974,24 @@ assert_equal "$(not_cel_policy_objects < "${image_tag_policy}")" \
   "kyverno.io/v1 ClusterPolicy/disallow-latest-tag" \
   "the catalog kind check must report a classic ClusterPolicy"
 
+# The Helm opt-in label must be read from the INCOMING object, as the classic selector reads it.
+# A matchConstraints objectSelector also matches when only the stored object carries the label,
+# so an update that removes the label would still be mutated. The CLI sets the old object to the
+# new one, so no fixture can show that update; this pins the shape instead.
+for helm_policy in "${helm_test_policy}" "${helm_crds_policy}" "${helm_remediation_policy}"; do
+  helm_mp="${helm_policy%.yaml}-mutating-policy.yaml"
+  opt_in_key="$(yq '.spec.rules[0].match.any[0].resources.selector.matchLabels | keys | .[0]' \
+    "${helm_policy}")"
+  assert_equal "$(yq '[.. | select(tag == "!!map") | select(has("objectSelector"))] | length' \
+    "${helm_mp}")" "0" \
+    "$(basename "${helm_mp}") must not select its opt-in label with an objectSelector"
+  assert_equal "$(yq '.spec.matchConditions | length' "${helm_mp}")" "1" \
+    "$(basename "${helm_mp}") must have exactly one match condition, the opt-in label"
+  assert_equal "$(yq '.spec.matchConditions[0].expression' "${helm_mp}")" \
+    "object.metadata.?labels[?'${opt_in_key}'].orValue('') == 'enabled'" \
+    "$(basename "${helm_mp}") must read the opt-in label from the incoming object"
+done
+
 # The GeneratingPolicy auto-vpa and a classic auto-vpa ClusterPolicy generate a
 # VerticalPodAutoscaler under the SAME name for the SAME workload, so two registered forms
 # would contend for one object on every consumer cluster, and no registered form would
