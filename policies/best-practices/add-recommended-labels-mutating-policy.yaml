@@ -11,11 +11,11 @@
 # so an authored value is never replaced. A "/" in a label key is written "~1" in a JSONPatch
 # path.
 #
-# Autogen is off: the policy matches Deployments, StatefulSets and DaemonSets, not Pods. A
-# JSONPatch mutation keeps one mutation form across the catalog's MutatingPolicies (an
-# ApplyConfiguration cannot be tested on the Flux custom resources). Background evaluation is
-# off and mutateExisting stays at its default (off), so, like the classic rule, it acts only on
-# create and update admission requests.
+# The policy matches Deployments, StatefulSets and DaemonSets, not Pods, so Pod-controller
+# autogen has nothing to add. A JSONPatch mutation keeps one mutation form across the
+# catalog's MutatingPolicies (an ApplyConfiguration cannot be tested on the Flux custom
+# resources). Background evaluation is off and mutateExisting stays at its default (off), so,
+# like the classic rule, it acts only on create and update admission requests.
 #
 # FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin.
 apiVersion: policies.kyverno.io/v1
