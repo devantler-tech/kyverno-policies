@@ -225,8 +225,9 @@ another.
 
 What changes for a consumer:
 
-- **Reports.** A policy report result names the former rule as its `policy` and carries no `rule`; for
-  example `policy: require-image-tag` instead of `policy: disallow-latest-tag, rule: require-image-tag`.
+- **Reports.** A policy report result names the former rule as its `policy` and carries no `rule`, as
+  the CLI's reports show (not yet observed in a cluster); for example `policy: require-image-tag`
+  instead of `policy: disallow-latest-tag, rule: require-image-tag`.
   Update any alert, dashboard or query that filters on the old names.
 - **Exclusions and enforcement.** Classic exclusions and `failureAction` patches do not apply to the new
   kind. Patch each `ValidatingPolicy` instead: `spec.validationActions` for `Deny`, and

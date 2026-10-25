@@ -19,6 +19,7 @@ resources:
   - ../disallow-latest-tag/resources.yaml
 results:
   - policy: require-image-tag
+    isValidatingPolicy: true
     resources:
       - apps/tagged-images
       - apps/tag-and-digest
@@ -31,6 +32,7 @@ results:
       - apps/latest-ephemeral-image
     result: pass
   - policy: require-image-tag
+    isValidatingPolicy: true
     resources:
       - apps/tagless-image
       - apps/registry-port-tagless-image
@@ -38,6 +40,7 @@ results:
       - apps/tagless-ephemeral-image
     result: fail
   - policy: disallow-latest-tag
+    isValidatingPolicy: true
     resources:
       - apps/tagged-images
       - apps/tag-and-digest
@@ -50,6 +53,7 @@ results:
       - apps/tagless-ephemeral-image
     result: pass
   - policy: disallow-latest-tag
+    isValidatingPolicy: true
     resources:
       - apps/latest-image
       - apps/latest-and-digest

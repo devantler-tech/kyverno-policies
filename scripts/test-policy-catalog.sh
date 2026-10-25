@@ -744,7 +744,7 @@ report_results() {
   # The CLI prints a deprecation warning for a classic policy before the report.
   printf '%s\n' "${report}" | sed -n '/^apiVersion:/,$p' |
     IDENTITY="${identity}" yq '.results[] |
-      .[env(IDENTITY)] + " " + .resources[0].namespace + "/" + .resources[0].name + " " + .result' |
+      .[env(IDENTITY)] + " " + (.resources[0].namespace // "") + "/" + .resources[0].name + " " + .result' |
     sort
 }
 

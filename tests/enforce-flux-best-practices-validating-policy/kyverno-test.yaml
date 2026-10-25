@@ -20,10 +20,12 @@ resources:
   - ../enforce-flux-best-practices/resources.yaml
 results:
   - policy: kustomization-recommended-settings
+    isValidatingPolicy: true
     resources:
       - apps/valid-kustomization
     result: pass
   - policy: kustomization-recommended-settings
+    isValidatingPolicy: true
     resources:
       - apps/missing-kustomization-interval
       - apps/missing-kustomization-timeout
@@ -35,35 +37,41 @@ results:
       - flux-system/flux-system
     result: fail
   - policy: helmrelease-reconciliation-settings
+    isValidatingPolicy: true
     resources:
       - apps/valid-finite-remediation
       - apps/valid-infinite-remediation
       - apps/valid-retry-on-failure
     result: pass
   - policy: helmrelease-reconciliation-settings
+    isValidatingPolicy: true
     resources:
       - apps/missing-helmrelease-interval
       - apps/missing-helmrelease-timeout
     result: fail
   - policy: helmrelease-install-failure-handling
+    isValidatingPolicy: true
     resources:
       - apps/valid-finite-remediation
       - apps/valid-infinite-remediation
       - apps/valid-retry-on-failure
     result: pass
   - policy: helmrelease-install-failure-handling
+    isValidatingPolicy: true
     resources:
       - apps/zero-install-remediation
       - apps/noncanonical-negative-install-remediation
       - apps/missing-install-failure-handling
     result: fail
   - policy: helmrelease-upgrade-failure-handling
+    isValidatingPolicy: true
     resources:
       - apps/valid-finite-remediation
       - apps/valid-infinite-remediation
       - apps/valid-retry-on-failure
     result: pass
   - policy: helmrelease-upgrade-failure-handling
+    isValidatingPolicy: true
     resources:
       - apps/zero-upgrade-remediation
       - apps/disabled-last-failure-remediation
