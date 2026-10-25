@@ -22,6 +22,7 @@ resources:
   - ../helm-release-install-crds/resources.yaml
 results:
   - policy: helm-release-install-crds
+    isMutatingPolicy: true
     resources:
       - apps/opted-in-without-crd-settings
       - apps/opted-in-with-existing-settings
@@ -29,6 +30,7 @@ results:
     kind: HelmRelease
     result: pass
   - policy: helm-release-install-crds
+    isMutatingPolicy: true
     resources:
       - apps/already-configured
     patchedResources: ../helm-release-install-crds/resources.yaml

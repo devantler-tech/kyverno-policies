@@ -26,6 +26,7 @@ resources:
   - ../helm-release-remediation-retries/resources.yaml
 results:
   - policy: helm-release-remediation-retries
+    isMutatingPolicy: true
     resources:
       - apps/missing-defaults
       - apps/remediate-on-failure-with-siblings
@@ -34,6 +35,7 @@ results:
     kind: HelmRelease
     result: pass
   - policy: helm-release-remediation-retries
+    isMutatingPolicy: true
     resources:
       - apps/install-retry-on-failure
       - apps/explicit-unlimited-false-and-upgrade-strategy
@@ -41,6 +43,7 @@ results:
     kind: HelmRelease
     result: pass
   - policy: helm-release-remediation-retries
+    isMutatingPolicy: true
     resources:
       - apps/explicit-zero-false
       - apps/explicit-zero-with-flux-default

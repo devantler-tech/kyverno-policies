@@ -22,6 +22,7 @@ resources:
   - ../add-recommended-labels/resources.yaml
 results:
   - policy: add-recommended-labels
+    isMutatingPolicy: true
     resources:
       - apps/unlabelled-deployment
       - apps/authored-statefulset
@@ -31,6 +32,7 @@ results:
     patchedResources: ../add-recommended-labels/patched-resources.yaml
     result: pass
   - policy: add-recommended-labels
+    isMutatingPolicy: true
     resources:
       - apps/authored-deployment
     patchedResources: ../add-recommended-labels/resources.yaml
