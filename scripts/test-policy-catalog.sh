@@ -251,13 +251,13 @@ assert_equal "$(yq '.spec.rules[0].mutate.patchStrategicMerge.spec.template.meta
   "shared recommended-label policy must derive the pod-template name label from the workload name"
 assert_equal "$(yq '[.resources[] |
   select(. == "policies/best-practices/add-recommended-labels.yaml")
-] | length' "${repo_root}/kustomization.yaml")" "1" \
-  "shared recommended-label policy must be registered exactly once"
+] | length' "${repo_root}/kustomization.yaml")" "0" \
+  "the classic recommended-label ClusterPolicy must not be registered beside its MutatingPolicy form"
 
 if ! grep -Fq \
   'policies/best-practices/add-recommended-labels.yaml' \
   "${repo_root}/README.md"; then
-  echo "FAIL: README catalog is missing add-recommended-labels" >&2
+  echo "FAIL: README is missing the classic add-recommended-labels rollback" >&2
   exit 1
 fi
 
@@ -380,8 +380,8 @@ if [[ "${helm_crds_minversion}" != "1.18.0" ]]; then
   exit 1
 fi
 
-if [[ "${helm_crds_catalog_entry_count}" -ne 1 ]]; then
-  echo "FAIL: shared Helm CRD policy must be registered exactly once in the root catalog" >&2
+if [[ "${helm_crds_catalog_entry_count}" -ne 0 ]]; then
+  echo "FAIL: the classic Helm CRD ClusterPolicy must not be registered beside its MutatingPolicy form" >&2
   exit 1
 fi
 
@@ -484,8 +484,8 @@ if [[ "${helm_test_minversion}" != "1.18.0" ]]; then
   exit 1
 fi
 
-if [[ "${helm_test_catalog_entry_count}" -ne 1 ]]; then
-  echo "FAIL: shared Helm test policy must be registered exactly once in the root catalog" >&2
+if [[ "${helm_test_catalog_entry_count}" -ne 0 ]]; then
+  echo "FAIL: the classic Helm test ClusterPolicy must not be registered beside its MutatingPolicy form" >&2
   exit 1
 fi
 
@@ -514,8 +514,8 @@ assert_equal "$(yq '[.. | select(tag == "!!map") |
   "shared Helm remediation policy must not mutate existing or targeted resources"
 assert_equal "$(yq '[.resources[] |
   select(. == "policies/flux/helm-release-remediation-retries.yaml")
-] | length' "${repo_root}/kustomization.yaml")" "1" \
-  "shared Helm remediation policy must be registered exactly once"
+] | length' "${repo_root}/kustomization.yaml")" "0" \
+  "the classic Helm remediation ClusterPolicy must not be registered beside its MutatingPolicy form"
 
 for side in install upgrade; do
   rule_name="default-${side}-remediation"
@@ -826,6 +826,151 @@ assert_cel_port "Flux best-practices" "${flux_policy}" "${cel_flux_policy}" \
 assert_equal "$(yq --no-doc '.spec.autogen.podControllers.controllers | (tag) + " " + (length | tostring)' \
   "${cel_image_tag_policy}" | sort -u)" "!!seq 0" \
   "every image-tag ValidatingPolicy must disable Pod-controller autogen"
+
+# MutatingPolicy forms of the four classic mutate policies (issue #44), one per classic policy
+# and under its name, so a consumer's reference and patch targets keep their names. The
+# classic files stay in the repository, unregistered, as the rollback form, and keep their own
+# behavior tests.
+#
+# The parity check runs every fixture resource through the classic and the MutatingPolicy
+# form and compares the results. It covers what the fixtures' `skip` rows cannot: a resource
+# a MutatingPolicy does not select reports `Excluded`, which satisfies any `skip` row, so a
+# widened match would otherwise pass. Its positive control is that the classic form changes
+# at least one fixture resource.
+
+# Prints every resource in a fixture file as it leaves admission through a policy file: one
+# key-sorted YAML stream, ordered by kind, namespace and name. `kyverno apply --output` writes
+# each resource a policy in the file evaluated and leaves out one it did not match at all, so a
+# resource missing from that directory is read from the fixture file unchanged.
+admitted_resources() {
+  local policy_file="$1"
+  local resource_file="$2"
+  local output_dir
+  local cli_errors
+  local admitted=()
+  local file
+  local status=0
+
+  output_dir="$(mktemp -d)"
+  cli_errors="$(kyverno apply "${policy_file}" --resource "${resource_file}" \
+    --output "${output_dir}" --remove-color 2>&1 >/dev/null)" || status=$?
+  if [[ "${status}" -ne 0 ]]; then
+    rm -rf "${output_dir}"
+    echo "FAIL: kyverno apply ${policy_file} exited ${status}:" >&2
+    printf '%s\n' "${cli_errors}" >&2
+    exit 1
+  fi
+
+  # A policy file that matches no fixture resource leaves the directory empty, and then every
+  # resource is read from the fixture file.
+  for file in "${output_dir}"/*; do
+    if [[ -f "${file}" ]]; then
+      admitted+=("${file}")
+    fi
+  done
+
+  yq ea -P '[.] | map(select(. != null)) |
+    group_by(.kind + "/" + (.metadata.namespace // "") + "/" +
+      (.metadata.name // .metadata.generateName // "")) |
+    map(.[-1]) | .[] | sort_keys(..) | split_doc' \
+    "${resource_file}" ${admitted[@]+"${admitted[@]}"} || status=$?
+  rm -rf "${output_dir}"
+  if [[ "${status}" -ne 0 ]]; then
+    echo "FAIL: could not read the resources ${policy_file} admitted" >&2
+    exit 1
+  fi
+}
+
+assert_mutating_port() {
+  local label="$1"
+  local classic_file="$2"
+  local mp_file="$3"
+  local resource_file="$4"
+  local catalog_path="${mp_file#"${repo_root}/"}"
+  local unchanged
+  local classic_admitted
+  local mp_admitted
+
+  if [[ ! -f "${mp_file}" ]]; then
+    echo "FAIL: shared catalog is missing ${catalog_path}" >&2
+    exit 1
+  fi
+
+  assert_equal "$(yq --no-doc '.apiVersion + " " + .kind' "${mp_file}" | sort -u)" \
+    "policies.kyverno.io/v1 MutatingPolicy" \
+    "the ${label} policy must be a policies.kyverno.io/v1 MutatingPolicy"
+  assert_equal "$(yq --no-doc '.metadata.name' "${mp_file}")" \
+    "$(yq '.metadata.name' "${classic_file}")" \
+    "the ${label} MutatingPolicy must keep the classic policy's name"
+  assert_equal "$(yq --no-doc '.metadata.annotations."policies.kyverno.io/minversion"' \
+    "${mp_file}")" "1.19.0" \
+    "the ${label} MutatingPolicy must declare the Kyverno 1.19.0 floor"
+  assert_equal "$(yq --no-doc '.spec.evaluation.background.enabled' "${mp_file}")" "false" \
+    "the ${label} MutatingPolicy must be admission-only, like the classic policy"
+  assert_equal "$(yq --no-doc '.spec.evaluation.mutateExisting.enabled // false' "${mp_file}")" \
+    "false" \
+    "the ${label} MutatingPolicy must not mutate existing resources"
+  assert_equal "$(yq --no-doc '[.spec.matchConstraints.resourceRules[].operations | join(",")] |
+    unique | join(" ")' "${mp_file}")" "CREATE,UPDATE" \
+    "the ${label} MutatingPolicy must match create and update requests"
+  assert_equal "$(CATALOG_PATH="${catalog_path}" yq '[.resources[] |
+    select(. == env(CATALOG_PATH))] | length' "${repo_root}/kustomization.yaml")" "1" \
+    "the ${label} MutatingPolicy must be registered exactly once"
+
+  if ! grep -Fq "${catalog_path}" "${repo_root}/README.md"; then
+    echo "FAIL: README catalog is missing ${catalog_path}" >&2
+    exit 1
+  fi
+
+  unchanged="$(yq -P 'sort_keys(..)' "${resource_file}" | yq ea -P '[.] |
+    group_by(.kind + "/" + (.metadata.namespace // "") + "/" +
+      (.metadata.name // .metadata.generateName // "")) |
+    map(.[-1]) | .[] | split_doc')"
+  classic_admitted="$(admitted_resources "${classic_file}" "${resource_file}")"
+  mp_admitted="$(admitted_resources "${mp_file}" "${resource_file}")"
+
+  if [[ "${classic_admitted}" == "${unchanged}" ]]; then
+    echo "FAIL: the classic ${label} policy changed no fixture resource, so there is nothing to compare" >&2
+    exit 1
+  fi
+
+  if [[ "${mp_admitted}" != "${classic_admitted}" ]]; then
+    echo "FAIL: the ${label} MutatingPolicy admits the classic fixtures differently from the classic policy:" >&2
+    diff <(printf '%s\n' "${classic_admitted}") <(printf '%s\n' "${mp_admitted}") >&2 || true
+    exit 1
+  fi
+}
+
+assert_mutating_port "recommended-label" "${recommended_labels_policy}" \
+  "${repo_root}/policies/best-practices/add-recommended-labels-mutating-policy.yaml" \
+  "${repo_root}/tests/add-recommended-labels/resources.yaml"
+assert_mutating_port "Helm test" "${helm_test_policy}" \
+  "${repo_root}/policies/flux/helm-release-enable-tests-mutating-policy.yaml" \
+  "${repo_root}/tests/helm-release-enable-tests/resources.yaml"
+assert_mutating_port "Helm CRD" "${helm_crds_policy}" \
+  "${repo_root}/policies/flux/helm-release-install-crds-mutating-policy.yaml" \
+  "${repo_root}/tests/helm-release-install-crds/resources.yaml"
+assert_mutating_port "Helm remediation" "${helm_remediation_policy}" \
+  "${repo_root}/policies/flux/helm-release-remediation-retries-mutating-policy.yaml" \
+  "${repo_root}/tests/helm-release-remediation-retries/resources.yaml"
+
+# The Helm opt-in label must be read from the INCOMING object, as the classic selector reads it.
+# A matchConstraints objectSelector also matches when only the stored object carries the label,
+# so an update that removes the label would still be mutated. The CLI sets the old object to the
+# new one, so no fixture can show that update; this pins the shape instead.
+for helm_policy in "${helm_test_policy}" "${helm_crds_policy}" "${helm_remediation_policy}"; do
+  helm_mp="${helm_policy%.yaml}-mutating-policy.yaml"
+  opt_in_key="$(yq '.spec.rules[0].match.any[0].resources.selector.matchLabels | keys | .[0]' \
+    "${helm_policy}")"
+  assert_equal "$(yq '[.. | select(tag == "!!map") | select(has("objectSelector"))] | length' \
+    "${helm_mp}")" "0" \
+    "$(basename "${helm_mp}") must not select its opt-in label with an objectSelector"
+  assert_equal "$(yq '.spec.matchConditions | length' "${helm_mp}")" "1" \
+    "$(basename "${helm_mp}") must have exactly one match condition, the opt-in label"
+  assert_equal "$(yq '.spec.matchConditions[0].expression' "${helm_mp}")" \
+    "object.metadata.?labels[?'${opt_in_key}'].orValue('') == 'enabled'" \
+    "$(basename "${helm_mp}") must read the opt-in label from the incoming object"
+done
 
 # The GeneratingPolicy auto-vpa and a classic auto-vpa ClusterPolicy generate a
 # VerticalPodAutoscaler under the SAME name for the SAME workload, so two registered forms

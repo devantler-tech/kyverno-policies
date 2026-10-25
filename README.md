@@ -32,13 +32,13 @@ guide do not grant unrestricted reuse or redistribution rights.
 
 | Policy | Behavior | Prerequisites |
 |---|---|---|
-| [`add-recommended-labels`](policies/best-practices/add-recommended-labels.yaml) | Adds missing Kubernetes identity labels to Deployments, StatefulSets, and DaemonSets without replacing authored values | Kyverno 1.18+ and admission processing that includes the target workload |
+| [`add-recommended-labels`](policies/best-practices/add-recommended-labels-mutating-policy.yaml) | Adds missing Kubernetes identity labels to Deployments, StatefulSets, and DaemonSets without replacing authored values | Kyverno 1.19+ and admission processing that includes the target workload |
 | [`auto-vpa`](policies/best-practices/auto-vpa-generating-policy.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.19+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
 | [`disallow-latest-tag`](policies/best-practices/disallow-latest-tag-validating-policy.yaml) | Audits Pod images that are pinned by neither a tag nor a digest, or that use the mutable `:latest` tag | Kyverno 1.19+ and admission/background processing that includes Pods |
 | [`enforce-flux-best-practices`](policies/flux/enforce-flux-best-practices-validating-policy.yaml) | Validates reliability settings on Flux Kustomizations and HelmReleases | Kyverno 1.19+ and the Flux Kustomization v1 and HelmRelease v2 CRDs |
-| [`helm-release-enable-tests`](policies/flux/helm-release-enable-tests.yaml) | Enables Helm test actions for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
-| [`helm-release-install-crds`](policies/flux/helm-release-install-crds.yaml) | Creates and replaces chart CRDs for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
-| [`helm-release-remediation-retries`](policies/flux/helm-release-remediation-retries.yaml) | Supplies safe install and upgrade remediation defaults for explicitly labelled Flux HelmReleases | Kyverno 1.18+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
+| [`helm-release-enable-tests`](policies/flux/helm-release-enable-tests-mutating-policy.yaml) | Enables Helm test actions for explicitly labelled Flux HelmReleases | Kyverno 1.19+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
+| [`helm-release-install-crds`](policies/flux/helm-release-install-crds-mutating-policy.yaml) | Creates and replaces chart CRDs for explicitly labelled Flux HelmReleases | Kyverno 1.19+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
+| [`helm-release-remediation-retries`](policies/flux/helm-release-remediation-retries-mutating-policy.yaml) | Supplies safe install and upgrade remediation defaults for explicitly labelled Flux HelmReleases | Kyverno 1.19+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
 
 ## Image tag behavior
 
@@ -60,8 +60,10 @@ resource filters still win, so a filtered Pod remains unreachable by this policy
 
 `add-recommended-labels` fills only missing identity labels on Deployments, StatefulSets, and DaemonSets.
 It sets `app` and `app.kubernetes.io/name` on workload metadata and
-`app.kubernetes.io/name` on the pod template, using the workload name for each added value. Conditional
-anchors leave every explicitly authored value unchanged.
+`app.kubernetes.io/name` on the pod template, using the workload name for each added value. A label is
+added only when its key is missing, so every explicitly authored value stays unchanged. The catalog ships
+it as a `MutatingPolicy`; see
+[Migrating the mutate policies to the MutatingPolicy form](#migrating-the-mutate-policies-to-the-mutatingpolicy-form).
 
 The policy excludes `kube-system`, `kube-public`, and `kube-node-lease`. It runs on create and update
 admission only, so existing workloads receive missing labels on their next admitted update. Kyverno's
@@ -251,6 +253,41 @@ What changes for a consumer:
 **Rollback** is the same steps in reverse: re-reference the classic file in this catalog (or your own
 copy) with your classic patches, then remove the `ValidatingPolicy` objects.
 
+## Migrating the mutate policies to the MutatingPolicy form
+
+For the same reason, the catalog registers the `MutatingPolicy` form of `add-recommended-labels`,
+`helm-release-enable-tests`, `helm-release-install-crds` and `helm-release-remediation-retries`. Each
+keeps its classic policy's name. The classic files stay in the repository unregistered as the rollback
+form and keep their own tests:
+[`add-recommended-labels.yaml`](policies/best-practices/add-recommended-labels.yaml),
+[`helm-release-enable-tests.yaml`](policies/flux/helm-release-enable-tests.yaml),
+[`helm-release-install-crds.yaml`](policies/flux/helm-release-install-crds.yaml) and
+[`helm-release-remediation-retries.yaml`](policies/flux/helm-release-remediation-retries.yaml).
+
+The tests run every classic fixture through both forms and require the same result for each resource,
+including the ones a policy must leave alone. Like the classic policies, the new ones act only on create
+and update admission requests: background evaluation is off and existing resources are not mutated.
+
+What changes for a consumer:
+
+- **Exclusions.** Classic `exclude` blocks and patches to classic rules do not apply to the new kind.
+  Patch each `MutatingPolicy` instead, through `spec.matchConstraints` (`namespaceSelector`,
+  `excludeResourceRules`) or an extra entry in `spec.matchConditions`. A classic `kyverno.io`
+  `PolicyException` does not cover the new kind; use a `policies.kyverno.io/v1` `PolicyException` whose
+  `policyRefs` name the `MutatingPolicy`.
+- **Opt-in labels and defaults** are unchanged, so labelled HelmReleases and workloads need no edit.
+
+**Rollout, per cluster:**
+
+1. Confirm the cluster runs Kyverno 1.19.0 or later.
+2. Reference the `MutatingPolicy` files and move your exclusions onto them as patches. While both forms
+   are applied, a request passes through both. That is harmless: the two forms set the same values, and
+   each only fills in what is missing or sets a value the other already set.
+3. Remove the classic policies.
+
+**Rollback** is the same steps in reverse: re-reference the classic file in this catalog (or your own
+copy) with your classic patches, then remove the `MutatingPolicy` objects.
+
 ## Helm test opt-in behavior
 
 `helm-release-enable-tests` sets `spec.test.enable: true` on a Flux HelmRelease v2 only when the resource
@@ -263,11 +300,11 @@ metadata:
 ```
 
 Unlabelled resources, other label values, legacy HelmRelease beta objects, and non-HelmRelease resources
-remain unchanged. The strategic-merge patch deliberately overrides an authored `enable: false` for an
+remain unchanged. The policy deliberately overrides an authored `enable: false` for an
 opted-in resource while preserving sibling test settings such as `timeout`, `ignoreFailures`, and
 `filters`.
 
-This is an admission mutation, not a mutate-existing rule. A HelmRelease that already exists when a
+This is an admission mutation, not a mutation of existing resources. A HelmRelease that already exists when a
 consumer adopts the policy must pass through a subsequent create or update admission request before the
 mutation applies. Kyverno's global admission filters still win, so a filtered HelmRelease remains
 unreachable by this policy. Enabling Helm tests makes test failures participate in the Helm action's
@@ -291,10 +328,10 @@ metadata:
 ```
 
 Unlabelled resources, other label values, legacy HelmRelease beta objects, and non-HelmRelease resources
-remain unchanged. The strategic-merge patch deliberately overrides existing CRD strategies for an
+remain unchanged. The policy deliberately overrides existing CRD strategies for an
 opted-in resource while preserving sibling install and upgrade settings such as remediation retries.
 
-This is an admission mutation, not a mutate-existing rule. A HelmRelease that already exists when a
+This is an admission mutation, not a mutation of existing resources. A HelmRelease that already exists when a
 consumer adopts the policy must pass through a subsequent create or update admission request before the
 mutation applies. Kyverno's global admission filters still win, so a filtered HelmRelease remains
 unreachable by this policy. Consumers own chart compatibility with replacing existing CRDs and should opt
@@ -340,7 +377,7 @@ unless an author later supplies a finite retry count. If helm-controller enables
 the admission object does not say so; the added remediation fields remain inert in that case. Authors
 who want the policy to skip an action entirely should select `RetryOnFailure` explicitly.
 
-This is an admission mutation, not a mutate-existing rule. A HelmRelease that already exists when a
+This is an admission mutation, not a mutation of existing resources. A HelmRelease that already exists when a
 consumer adopts the policy must pass through a subsequent create or update admission request before the
 defaults apply. Future updates continue to add any still-missing default leaves without changing values
 the workload author has since supplied. Kyverno's global admission resource filters still win, so a

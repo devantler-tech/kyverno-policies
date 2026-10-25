@@ -1,4 +1,8 @@
 ---
+# Classic form, kept unregistered as the rollback for
+# helm-release-install-crds-mutating-policy.yaml, the form the catalog registers. The README
+# section "Migrating the mutate policies to the MutatingPolicy form" is the switch and
+# rollback procedure.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:

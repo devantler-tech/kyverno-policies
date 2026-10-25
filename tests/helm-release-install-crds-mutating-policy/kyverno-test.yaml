@@ -1,0 +1,38 @@
+---
+# Parity spec for the MutatingPolicy port of helm-release-install-crds.
+#
+# The rows below repeat the classic rule's rows in ../helm-release-install-crds/kyverno-test.yaml,
+# against the same fixture file and the same patched fixtures. Sharing the classic fixtures is
+# the parity claim: an input set authored next to the new policy could drift with it and
+# prove nothing.
+#
+# Two differences, both CLI behaviour rather than policy behaviour. A matched resource whose
+# patch changes nothing is a `skip` for the classic rule and a `pass` here, so those rows
+# expect `pass` with the unchanged fixture file as their patched output. A resource the
+# policy does not select reports `Excluded`, which satisfies a `skip` row however the policy
+# behaves, so those rows are left out: scripts/test-policy-catalog.sh compares every fixture
+# resource after the classic and the MutatingPolicy forms instead.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: helm-release-install-crds-mutating-policy-matches-classic-output
+policies:
+  - ../../policies/flux/helm-release-install-crds-mutating-policy.yaml
+resources:
+  - ../helm-release-install-crds/resources.yaml
+results:
+  - policy: helm-release-install-crds
+    isMutatingPolicy: true
+    resources:
+      - apps/opted-in-without-crd-settings
+      - apps/opted-in-with-existing-settings
+    patchedResources: ../helm-release-install-crds/patched-resources.yaml
+    kind: HelmRelease
+    result: pass
+  - policy: helm-release-install-crds
+    isMutatingPolicy: true
+    resources:
+      - apps/already-configured
+    patchedResources: ../helm-release-install-crds/resources.yaml
+    kind: HelmRelease
+    result: pass
