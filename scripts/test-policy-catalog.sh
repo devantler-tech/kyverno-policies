@@ -846,22 +846,34 @@ admitted_resources() {
   local policy_file="$1"
   local resource_file="$2"
   local output_dir
+  local cli_errors
+  local admitted=()
+  local file
   local status=0
 
   output_dir="$(mktemp -d)"
-  kyverno apply "${policy_file}" --resource "${resource_file}" --output "${output_dir}" \
-    --remove-color >/dev/null 2>&1 || status=$?
+  cli_errors="$(kyverno apply "${policy_file}" --resource "${resource_file}" \
+    --output "${output_dir}" --remove-color 2>&1 >/dev/null)" || status=$?
   if [[ "${status}" -ne 0 ]]; then
     rm -rf "${output_dir}"
-    echo "FAIL: kyverno apply ${policy_file} exited ${status}" >&2
+    echo "FAIL: kyverno apply ${policy_file} exited ${status}:" >&2
+    printf '%s\n' "${cli_errors}" >&2
     exit 1
   fi
+
+  # A policy file that matches no fixture resource leaves the directory empty, and then every
+  # resource is read from the fixture file.
+  for file in "${output_dir}"/*; do
+    if [[ -f "${file}" ]]; then
+      admitted+=("${file}")
+    fi
+  done
 
   yq ea -P '[.] | map(select(. != null)) |
     group_by(.kind + "/" + (.metadata.namespace // "") + "/" +
       (.metadata.name // .metadata.generateName // "")) |
     map(.[-1]) | .[] | sort_keys(..) | split_doc' \
-    "${resource_file}" "${output_dir}"/* || status=$?
+    "${resource_file}" ${admitted[@]+"${admitted[@]}"} || status=$?
   rm -rf "${output_dir}"
   if [[ "${status}" -ne 0 ]]; then
     echo "FAIL: could not read the resources ${policy_file} admitted" >&2
