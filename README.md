@@ -183,7 +183,9 @@ complete local baseline, including the pinned Kyverno CLI and retired-link valid
 repository's [validation contract](AGENTS.md#validation) is authoritative if checks change.
 
 `kyverno test .` runs every policy's declarative behavior fixture, discovered recursively;
-`test-policy-catalog.sh` asserts the structural invariants those fixtures cannot express.
+`test-policy-catalog.sh` asserts the structural invariants those fixtures cannot express. One of them
+is that the root catalog registers only `policies.kyverno.io/v1` policies, so a classic `kyverno.io`
+policy cannot return to the catalog under any name.
 
 The generated-resource fixtures assert the exact VPA target, update mode, controlled resources, and
 bounds for each workload kind. An unmatched Job assertion verifies the policy does not generate outside

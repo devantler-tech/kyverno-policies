@@ -942,6 +942,38 @@ assert_mutating_port "Helm remediation" "${helm_remediation_policy}" \
   "${repo_root}/policies/flux/helm-release-remediation-retries-mutating-policy.yaml" \
   "${repo_root}/tests/helm-release-remediation-retries/resources.yaml"
 
+# Every object the root catalog registers must be a policies.kyverno.io/v1 kind (issue #52).
+# Kyverno 1.20 is expected to remove the classic kyverno.io kinds, so a classic policy that
+# slips back into the catalog under any name would be dropped by that upgrade. This is a list
+# of what is allowed rather than of what is not, so a new legacy kind is caught too. The
+# classic rollback files are not registered, so they are not checked here.
+#
+# Prints each object in a YAML stream whose apiVersion is not policies.kyverno.io/v1.
+not_cel_policy_objects() {
+  yq --no-doc 'select(.apiVersion != "policies.kyverno.io/v1") |
+    .apiVersion + " " + .kind + "/" + .metadata.name'
+}
+
+catalog_render="$(kubectl kustomize "${repo_root}")"
+catalog_object_count="$(printf '%s\n' "${catalog_render}" | yq --no-doc '.kind' | awk 'NF {n++} END {print n + 0}')"
+if [[ "${catalog_object_count}" -eq 0 ]]; then
+  echo "FAIL: the rendered root catalog holds no objects to check" >&2
+  exit 1
+fi
+
+catalog_not_cel="$(printf '%s\n' "${catalog_render}" | not_cel_policy_objects)"
+if [[ -n "${catalog_not_cel}" ]]; then
+  echo "FAIL: the root catalog registers objects that are not policies.kyverno.io/v1 kinds:" >&2
+  printf '%s\n' "${catalog_not_cel}" >&2
+  exit 1
+fi
+
+# Negative control: the check must report a classic rollback file, or an empty result above
+# would mean nothing.
+assert_equal "$(not_cel_policy_objects < "${image_tag_policy}")" \
+  "kyverno.io/v1 ClusterPolicy/disallow-latest-tag" \
+  "the catalog kind check must report a classic ClusterPolicy"
+
 # The GeneratingPolicy auto-vpa and a classic auto-vpa ClusterPolicy generate a
 # VerticalPodAutoscaler under the SAME name for the SAME workload, so two registered forms
 # would contend for one object on every consumer cluster, and no registered form would
