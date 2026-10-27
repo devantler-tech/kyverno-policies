@@ -80,6 +80,19 @@ Kyverno processes. The catalog ships it as three `GeneratingPolicy` objects, one
 classic `ClusterPolicy` and plans to remove it in 1.20. Consumers moving from a classic auto-vpa policy
 follow [Migrating to the GeneratingPolicy form](#migrating-to-the-generatingpolicy-form).
 
+Each generated VPA has a same-namespace `ownerReferences` entry for its target's actual UID.
+Kubernetes garbage collection can therefore remove the VPA when that workload is deleted,
+independently of Kyverno's synchronization cleanup. No controlling-owner or deletion-blocking
+flag is added. A missing, empty or non-string workload UID fails generation; it is never replaced
+with a name or a synthetic identity. A replacement workload uses its new UID.
+
+Consumers upgrading an existing GeneratingPolicy must verify owner references on the generated
+VPAs after synchronization. A VPA whose target has already disappeared cannot be repaired by
+regenerating from that target: inventory these orphans separately and use a reviewed cleanup
+that verifies policy provenance, exact VPA identity and a confirmed missing target. Do not delete
+manual VPAs or treat a failed target read as absence. This catalog change alone does not clean up
+an existing consumer orphan.
+
 | Workload | Update mode | Controlled resources | Recommendation bounds |
 |---|---|---|---|
 | Deployment | `InPlaceOrRecreate` | CPU and memory | `50m`/`64Mi` to `3`/`6Gi` |
@@ -128,9 +141,10 @@ Important operating constraints:
 
 ### Migrating to the GeneratingPolicy form
 
-The catalog ships only the `GeneratingPolicy` form of auto-vpa. Its tests hold it to the classic
-policy's recorded output (`tests/auto-vpa/generated-*-vpa.yaml`), so for every workload whose suffixed name
-fits in 253 characters the VPA it generates is identical to that of a classic auto-vpa `ClusterPolicy`.
+The catalog ships only the `GeneratingPolicy` form of auto-vpa. The complete ownership fixtures
+under `tests/auto-vpa-generating-policy-*/generated-vpa.yaml` preserve the names and sizing recorded
+in the legacy `tests/auto-vpa/generated-*-vpa.yaml` fixtures and add the workload ownership reference
+described above.
 A longer-named workload gets no VPA from the classic form, whose name would be longer than 253
 characters, and a shortened name from this one. The last catalog revision that still carries the classic
 form is

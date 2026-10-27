@@ -6,6 +6,7 @@ metadata:
   # guards against — three kinds legally sharing one name in one namespace.
   name: shared
   namespace: test
+  uid: 00000000-0000-4000-8000-000000000001
 spec:
   replicas: 2
   selector:

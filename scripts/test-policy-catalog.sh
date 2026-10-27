@@ -1121,6 +1121,46 @@ if [[ "${ported_generated_count}" -ne 3 ]]; then
   exit 1
 fi
 
+# The ownership reference is a runtime identity, not a name or an invented UID (#56).
+# A positive generation above prevents missing-policy failures from satisfying these negatives.
+for invalid_uid in missing empty nonstring; do
+  invalid_input="${ported_negative_dir}/invalid-${invalid_uid}.yaml"
+  case "${invalid_uid}" in
+    missing) yq 'del(.metadata.uid)' "${repo_root}/tests/auto-vpa/resources.yaml" >"${invalid_input}" ;;
+    empty) yq '.metadata.uid = ""' "${repo_root}/tests/auto-vpa/resources.yaml" >"${invalid_input}" ;;
+    nonstring) yq '.metadata.uid = 42' "${repo_root}/tests/auto-vpa/resources.yaml" >"${invalid_input}" ;;
+  esac
+  invalid_output="${ported_negative_dir}/${invalid_uid}"
+  mkdir "${invalid_output}"
+  invalid_rc=0
+  kyverno apply "${ported_vpa_policy}" --resource "${invalid_input}" \
+    --output "${invalid_output}" --remove-color >/dev/null 2>&1 || invalid_rc=$?
+  if [[ "${invalid_rc}" -eq 0 ]] || find "${invalid_output}" -type f -print -quit | grep -q .; then
+    echo "FAIL: auto-vpa must refuse ${invalid_uid} workload UIDs without generating an owner" >&2
+    exit 1
+  fi
+done
+# Keep the unmatched output directory empty; the inputs above are private scratch fixtures.
+rm -f "${ported_negative_dir}"/invalid-*.yaml
+
+replacement_uid='00000000-0000-4000-8000-000000000099'
+export replacement_uid
+yq '.metadata.uid = strenv(replacement_uid)' "${repo_root}/tests/auto-vpa/resources.yaml" \
+  >"${ported_negative_dir}/replacement.yaml"
+mkdir "${ported_negative_dir}/replacement"
+kyverno apply "${ported_vpa_policy}" --resource "${ported_negative_dir}/replacement.yaml" \
+  --output "${ported_negative_dir}/replacement" --remove-color >/dev/null
+replacement_count=0
+while IFS= read -r replacement_vpa; do
+  assert_equal "$(yq -r --no-doc 'select(.kind == "VerticalPodAutoscaler") | .metadata.ownerReferences | length' "${replacement_vpa}")" 1 \
+    'a generated VPA must have exactly one workload owner'
+  assert_equal "$(yq -r --no-doc 'select(.kind == "VerticalPodAutoscaler") | .metadata.ownerReferences[0].uid' "${replacement_vpa}")" "${replacement_uid}" \
+    'a replacement workload must own its generated VPA by its new UID'
+  replacement_count=$((replacement_count + 1))
+done < <(find "${ported_negative_dir}/replacement" -type f)
+assert_equal "${replacement_count}" 3 'the replacement identity control must generate all three VPA kinds'
+rm -rf "${ported_negative_dir}/replacement" "${ported_negative_dir}/replacement.yaml"
+
 kyverno apply "${ported_vpa_policy}" \
   --resource "${repo_root}/tests/auto-vpa/unmatched-job.yaml" \
   --output "${ported_negative_dir}" \
