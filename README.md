@@ -141,9 +141,10 @@ Important operating constraints:
 
 ### Migrating to the GeneratingPolicy form
 
-The catalog ships only the `GeneratingPolicy` form of auto-vpa. Its complete generated-resource
-fixtures preserve the classic policy's recorded names and sizing
-(`tests/auto-vpa/generated-*-vpa.yaml`) and add the workload ownership reference described above.
+The catalog ships only the `GeneratingPolicy` form of auto-vpa. The complete ownership fixtures
+under `tests/auto-vpa-generating-policy-*/generated-vpa.yaml` preserve the names and sizing recorded
+in the legacy `tests/auto-vpa/generated-*-vpa.yaml` fixtures and add the workload ownership reference
+described above.
 A longer-named workload gets no VPA from the classic form, whose name would be longer than 253
 characters, and a shortened name from this one. The last catalog revision that still carries the classic
 form is
