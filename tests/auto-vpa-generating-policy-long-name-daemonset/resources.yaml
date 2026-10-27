@@ -8,6 +8,7 @@ kind: DaemonSet
 metadata:
   name: ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
   namespace: test
+  uid: 00000000-0000-4000-8000-000000000001
 spec:
   selector:
     matchLabels:

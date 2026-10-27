@@ -9,6 +9,7 @@ kind: Deployment
 metadata:
   name: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbb
   namespace: test
+  uid: 00000000-0000-4000-8000-000000000001
 spec:
   replicas: 2
   selector:
@@ -28,6 +29,7 @@ kind: Deployment
 metadata:
   name: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-44c844c304
   namespace: test
+  uid: 00000000-0000-4000-8000-000000000002
 spec:
   replicas: 2
   selector:
@@ -47,6 +49,7 @@ kind: StatefulSet
 metadata:
   name: sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss.ttttttttttttttttttttttt
   namespace: test
+  uid: 00000000-0000-4000-8000-000000000003
 spec:
   serviceName: database
   replicas: 1
@@ -67,6 +70,7 @@ kind: StatefulSet
 metadata:
   name: sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss-c14161c863
   namespace: test
+  uid: 00000000-0000-4000-8000-000000000004
 spec:
   serviceName: database
   replicas: 1
@@ -87,6 +91,7 @@ kind: DaemonSet
 metadata:
   name: ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
   namespace: test
+  uid: 00000000-0000-4000-8000-000000000005
 spec:
   selector:
     matchLabels:
@@ -105,6 +110,7 @@ kind: DaemonSet
 metadata:
   name: dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd-5019291544
   namespace: test
+  uid: 00000000-0000-4000-8000-000000000006
 spec:
   selector:
     matchLabels:

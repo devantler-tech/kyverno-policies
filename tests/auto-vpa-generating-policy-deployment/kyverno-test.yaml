@@ -6,13 +6,12 @@
 # `resources` list nor `kind` narrows that, so a single Test carrying all three kinds
 # reports six spurious cross-kind failures.
 #
-# The expected output is ../auto-vpa/generated-deployment-vpa.yaml, the output of the classic
-# auto-vpa ClusterPolicy. That fixed expectation is the parity claim; an expectation
-# authored next to the new policy could drift with it and prove nothing.
+# The complete expectation preserves the classic output recorded under ../auto-vpa/
+# and adds the exact workload owner reference. Sizing and names retain their original baseline.
 apiVersion: cli.kyverno.io/v1alpha1
 kind: Test
 metadata:
-  name: auto-vpa-generating-policy-deployment-matches-classic-output
+  name: auto-vpa-generating-policy-deployment-owns-workload
 policies:
   - ../../policies/best-practices/auto-vpa-generating-policy.yaml
 resources:
@@ -21,6 +20,6 @@ results:
   - policy: auto-vpa-deployment
     resources:
       - test/shared
-    generatedResource: ../auto-vpa/generated-deployment-vpa.yaml
+    generatedResource: generated-vpa.yaml
     kind: Deployment
     result: pass
