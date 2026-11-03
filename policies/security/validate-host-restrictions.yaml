@@ -1,0 +1,86 @@
+---
+# Denies host-level access (hostPath volumes, hostNetwork, hostPID, hostIPC) and an explicit
+# hostUsers: true in a namespace opted into user namespaces. Graduated from devantler-tech/platform's
+# validate-host-restrictions (#46) with the same checks, messages, match scope and Deny action; the
+# platform's own namespace exclusions moved out to the consumer.
+#
+# SCOPE. The host-access checks skip the namespaces in `excludedNamespaces`, which here holds only
+# the namespaces Kubernetes itself owns. The exclusion is evaluated inside the policy rather than
+# in matchConditions on purpose: the hostUsers check has its own scope, and an in-policy exclusion
+# makes a background scan record a current pass for an exempt pod instead of recording nothing.
+# A consumer therefore extends the list by replacing this one variable, which stays first so the
+# patch path is stable (scripts/test-policy-catalog.sh pins it):
+#
+#   - op: replace
+#     path: /spec/variables/0/expression
+#     value: "['kube-system', 'kube-public', 'kube-node-lease', '<your namespace>']"
+#
+# HOSTUSERS. A namespace opts in with the label pod-security.devantler.tech/user-namespaces:
+# enabled, which a consumer pairs with a mutation that injects hostUsers: false where the field is
+# absent. A conditional mutation leaves an explicit hostUsers: true in place, silently, so this
+# check is the enforcement ratchet for the same control: an absent field passes, an explicit true
+# is denied. CloudNativePG instance pods (labelled cnpg.io/cluster) stay on host user namespaces
+# and are out of this check's scope, so it never blocks a pod the mutation deliberately skipped.
+#
+# FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: validate-host-restrictions
+  annotations:
+    policies.kyverno.io/title: Validate Host Restrictions
+    policies.kyverno.io/category: Pod Security, Best Practices
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Blocks host-level access (hostPath, hostNetwork, hostPID, hostIPC) to
+      prevent container escape, and an explicit hostUsers: true in a namespace
+      opted into user namespaces.
+spec:
+  validationActions:
+    - Deny
+  evaluation:
+    background:
+      enabled: true
+  autogen:
+    podControllers:
+      controllers: []
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  variables:
+    # Keep first: consumers replace /spec/variables/0/expression to add their own namespaces.
+    - name: excludedNamespaces
+      expression: "['kube-system', 'kube-public', 'kube-node-lease']"
+    - name: namespace
+      expression: object.metadata.?namespace.orValue('')
+    # Scope of the host-path and host-namespace checks.
+    - name: hostAccessScoped
+      expression: "!(variables.namespace in variables.excludedNamespaces)"
+    - name: hostUsersScoped
+      expression: >-
+        namespaceObject.?metadata.?labels[?'pod-security.devantler.tech/user-namespaces'].orValue('') == 'enabled' &&
+        !('cnpg.io/cluster' in object.metadata.?labels.orValue({}))
+  validations:
+    - expression: >-
+        !variables.hostAccessScoped ||
+        object.spec.?volumes.orValue([]).all(v, !has(v.hostPath))
+      message: "hostPath volumes are not allowed."
+    - expression: >-
+        !variables.hostAccessScoped ||
+        (!object.spec.?hostNetwork.orValue(false) &&
+        !object.spec.?hostPID.orValue(false) &&
+        !object.spec.?hostIPC.orValue(false))
+      message: "hostNetwork, hostPID, and hostIPC are not allowed."
+    # An absent hostUsers passes (the consumer's mutation supplies the default), while an explicit
+    # true is rejected.
+    - expression: >-
+        !variables.hostUsersScoped || !object.spec.?hostUsers.orValue(false)
+      message: >-
+        hostUsers: true is not allowed in a namespace opted into user
+        namespaces. Remove the field to inherit hostUsers: false, or drop the
+        pod-security.devantler.tech/user-namespaces label from the namespace.

@@ -1,0 +1,30 @@
+---
+# Consumer parity for validate-pod-security (#46): the platform's provider Deployment case,
+# unchanged, against the catalog policy plus the platform's consumer exception.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: validate-pod-security-provider-deployment
+policies:
+  - ../../policies/security/validate-pod-security.yaml
+exceptions:
+  - ../validate-pod-security/consumer-exception.yaml
+resources:
+  - resources.yaml
+results:
+  # A container-only seccompProfile does NOT satisfy the pod-level check, so
+  # every provider Deployment is denied at create. add-security-context cannot
+  # rescue it: that mutate policy carries match/exclude selectors, so Kyverno
+  # generates no pod-controller rules for it and it never sees a Deployment.
+  # Both Deployments satisfy the container checks, so the pod-level seccomp
+  # profile is the only difference between them.
+  - policy: validate-pod-security
+    resources:
+      - provider-container-seccomp-only
+    kind: Deployment
+    result: fail
+  - policy: validate-pod-security
+    resources:
+      - provider-pod-seccomp
+    kind: Deployment
+    result: pass

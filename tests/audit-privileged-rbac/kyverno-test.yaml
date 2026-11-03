@@ -1,0 +1,76 @@
+---
+# The catalog audit-privileged-rbac on its own (#46), against the platform's fixtures
+# (resources.yaml) and the catalog's built-in exclusion (catalog-scope.yaml). Without a consumer
+# list, the platform's reviewed controller role crossplane-rbac-manager is refused like any other
+# privileged grant, while Kubernetes' cluster-admin passes. consumer-parity-test.yaml holds the
+# same fixtures to the platform's exact results once its reviewed identities are patched in
+# (consumer/), which scripts/test-policy-catalog.sh runs.
+#
+# kyverno test pairs a row by name alone, ignoring namespace and kind, so the velero-server Role
+# and ClusterRole fixtures, which share one name, are not listed here.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: audit-privileged-rbac
+policies:
+  - ../../policies/security/audit-privileged-rbac.yaml
+resources:
+  - resources.yaml
+  - catalog-scope.yaml
+results:
+  - policy: audit-privileged-rbac
+    kind: ClusterRole
+    result: pass
+    resources:
+      - cluster-admin
+      - read-only-rbac
+      - application-manager
+      - read-all
+      - inert-custom-group-verb
+      - inert-resource-verb
+      - read-users
+      - read-auth-metadata
+      - aggregate-not-yet-populated
+      - null-rules
+      - non-resource-health-reader
+  - policy: audit-privileged-rbac
+    kind: ClusterRole
+    result: fail
+    resources:
+      # Excluded by the platform's own list, not by the catalog's.
+      - crossplane-rbac-manager
+      - triple-wildcard
+      - wildcard-with-extra-values
+      - bind-role
+      - escalate-clusterrole
+      - rbac-wildcard-verbs
+      - rbac-wildcard-resources
+      - rbac-wildcard-group
+      - impersonate-users
+      - impersonate-groups
+      - impersonate-wildcard-verbs
+      - impersonate-wildcard-group
+      - impersonate-wildcard-resources
+      - impersonate-uids
+      - impersonate-extras
+      - impersonate-extras-subresource-wildcard
+      - impersonate-auth-wildcard-verbs
+      - impersonate-auth-wildcard-resources
+      - resource-name-constrained
+      - crossplane-rbac-manager-lookalike
+  - policy: audit-privileged-rbac
+    kind: Role
+    result: pass
+    resources:
+      - sample/namespaced-reader
+      - sample/namespaced-null-rules
+      - sample/inert-namespaced-user-impersonation
+      - sample/inert-namespaced-auth-impersonation
+      - sample/inert-namespaced-clusterrole-escalation
+  - policy: audit-privileged-rbac
+    kind: Role
+    result: fail
+    resources:
+      - sample/namespaced-wildcard
+      - sample/impersonate-serviceaccounts
+      - sample/namespaced-clusterrole-bind

@@ -5,7 +5,11 @@ resources:
   - policies/best-practices/add-recommended-labels-mutating-policy.yaml
   - policies/best-practices/auto-vpa-generating-policy.yaml
   - policies/best-practices/disallow-latest-tag-validating-policy.yaml
+  - policies/best-practices/validate-pdb-drain-safe.yaml
   - policies/flux/enforce-flux-best-practices-validating-policy.yaml
   - policies/flux/helm-release-enable-tests-mutating-policy.yaml
   - policies/flux/helm-release-install-crds-mutating-policy.yaml
   - policies/flux/helm-release-remediation-retries-mutating-policy.yaml
+  - policies/security/audit-privileged-rbac.yaml
+  - policies/security/validate-host-restrictions.yaml
+  - policies/security/validate-pod-security.yaml

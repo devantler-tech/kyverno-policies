@@ -1192,3 +1192,65 @@ if [[ "${collision_vpa_count}" -ne 6 || "${collision_unique_count}" -ne 6 || "${
   echo "FAIL: ported auto-vpa must give six long-name workloads six valid, different VPA names (got ${collision_unique_count} different of ${collision_vpa_count}, ${collision_overlong_count} too long)" >&2
   exit 1
 fi
+
+# ---------------------------------------------------------------------------------------------
+# Platform validation policies graduated from devantler-tech/platform (#46).
+#
+# Two of them take consumer exclusions as a patch to their FIRST variable rather than as a
+# PolicyException, so that a background scan records a current pass for an exempt object. That
+# patch path is part of the catalog's interface: pin the variable at index 0 and its default list.
+assert_equal "$(yq -r '.spec.variables[0].name' "${repo_root}/policies/security/validate-host-restrictions.yaml")" \
+  "excludedNamespaces" "validate-host-restrictions must keep excludedNamespaces as its first variable (the consumer patch path)"
+assert_equal "$(yq -r '.spec.variables[0].name' "${repo_root}/policies/security/audit-privileged-rbac.yaml")" \
+  "reviewedExclusions" "audit-privileged-rbac must keep reviewedExclusions as its first variable (the consumer patch path)"
+assert_equal "$(yq -r '.spec.variables[0].expression' "${repo_root}/policies/security/validate-host-restrictions.yaml")" \
+  "['kube-system', 'kube-public', 'kube-node-lease']" \
+  "validate-host-restrictions must exclude only the Kubernetes-owned namespaces by default"
+# The failure actions the platform chose travel with each policy.
+for denied_policy in security/validate-pod-security security/validate-host-restrictions security/audit-privileged-rbac; do
+  assert_equal "$(yq -r '.spec.validationActions | join(",")' "${repo_root}/policies/${denied_policy}.yaml")" "Deny" \
+    "${denied_policy} must keep its Deny action"
+done
+assert_equal "$(yq -r '.spec.validationActions | join(",")' "${repo_root}/policies/best-practices/validate-pdb-drain-safe.yaml")" "Audit" \
+  "validate-pdb-drain-safe must keep its Audit action"
+assert_equal "$(yq -r '.spec.failurePolicy' "${repo_root}/policies/security/audit-privileged-rbac.yaml")" "Fail" \
+  "audit-privileged-rbac must keep failurePolicy Fail"
+
+# Consumer parity: render each example consumer overlay (tests/<policy>/consumer), then run the
+# platform's own test cases (tests/<policy>/consumer-parity-test.yaml, unchanged in every expected
+# result) against the rendered policy. The unpatched catalog policy must FAIL the same cases, which
+# is what shows the overlay, not a vacuous test, produces the pass.
+parity_root="$(mktemp -d)"
+trap 'rm -rf "${ported_positive_dir}" "${ported_negative_dir}" "${ported_collision_dir}" "${parity_root}"' EXIT
+for parity_policy in validate-host-restrictions audit-privileged-rbac; do
+  parity_dir="${parity_root}/${parity_policy}"
+  mkdir -p "${parity_dir}"
+  kubectl kustomize --load-restrictor LoadRestrictionsNone "${repo_root}/tests/${parity_policy}/consumer" \
+    >"${parity_dir}/policy.yaml"
+  assert_equal "$(yq -r --no-doc 'select(.kind == "ValidatingPolicy") | .metadata.name' "${parity_dir}/policy.yaml")" \
+    "${parity_policy}" "the ${parity_policy} consumer overlay must render exactly that ValidatingPolicy"
+  cp "${repo_root}/tests/${parity_policy}/resources.yaml" "${parity_dir}/resources.yaml"
+  if [[ -f "${repo_root}/tests/${parity_policy}/values.yaml" ]]; then
+    cp "${repo_root}/tests/${parity_policy}/values.yaml" "${parity_dir}/values.yaml"
+  fi
+  cp "${repo_root}/tests/${parity_policy}/consumer-parity-test.yaml" "${parity_dir}/kyverno-test.yaml"
+
+  parity_output="$(kyverno test "${parity_dir}" --require-tests --remove-color 2>&1)" || {
+    printf '%s\n' "${parity_output}" >&2
+    echo "FAIL: the platform's ${parity_policy} cases must pass against the catalog policy plus its consumer overlay" >&2
+    exit 1
+  }
+  if ! grep -Eq 'Test Summary: [1-9][0-9]* tests passed and 0 tests failed' <<<"${parity_output}"; then
+    printf '%s\n' "${parity_output}" >&2
+    echo "FAIL: the ${parity_policy} consumer parity run must execute at least one case and fail none" >&2
+    exit 1
+  fi
+
+  cp "${repo_root}/policies/security/${parity_policy}.yaml" "${parity_dir}/policy.yaml"
+  unpatched_rc=0
+  kyverno test "${parity_dir}" --require-tests --remove-color >/dev/null 2>&1 || unpatched_rc=$?
+  if [[ "${unpatched_rc}" -eq 0 ]]; then
+    echo "FAIL: the platform's ${parity_policy} cases must fail against the catalog policy without the consumer overlay" >&2
+    exit 1
+  fi
+done

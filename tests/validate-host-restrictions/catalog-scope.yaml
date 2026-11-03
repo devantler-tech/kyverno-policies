@@ -1,0 +1,19 @@
+---
+# Catalog-scope fixture (#46): the same host access as observability/infrastructure-pod in
+# resources.yaml, in a namespace Kubernetes owns, which the catalog policy itself skips.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: system-host-pod
+  namespace: kube-system
+spec:
+  hostNetwork: true
+  hostPID: true
+  hostIPC: true
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+  volumes:
+    - name: host
+      hostPath:
+        path: /fixture

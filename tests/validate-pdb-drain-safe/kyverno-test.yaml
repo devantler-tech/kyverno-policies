@@ -1,0 +1,39 @@
+---
+# Consumer parity for validate-pdb-drain-safe (#46): the platform's own test, unchanged in every
+# expected result, run against the catalog policy plus the platform's operator exclusions expressed
+# as a consumer PolicyException (consumer-exception.yaml). A maxUnavailable PDB passes and a
+# minAvailable PDB fails. Each exclusion is pinned: a CloudNativePG-labelled PDB, a KSail-installed
+# PDB by name, and a Longhorn-managed PDB, which is exempt only inside longhorn-system.
+#
+# tests/validate-pdb-drain-safe-catalog-scope holds the catalog policy's own scope without the
+# exception.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: validate-pdb-drain-safe
+policies:
+  - ../../policies/best-practices/validate-pdb-drain-safe.yaml
+exceptions:
+  - consumer-exception.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: validate-pdb-drain-safe
+    resources:
+      - apps/max-unavailable
+    kind: PodDisruptionBudget
+    result: pass
+  - policy: validate-pdb-drain-safe
+    resources:
+      - apps/min-available
+      - apps/instance-manager-outside-longhorn
+    kind: PodDisruptionBudget
+    result: fail
+  - policy: validate-pdb-drain-safe
+    resources:
+      - apps/cnpg-cluster
+      - cert-manager/cert-manager
+      - longhorn-system/instance-manager-abc123
+      - longhorn-system/csi-attacher
+    kind: PodDisruptionBudget
+    result: skip

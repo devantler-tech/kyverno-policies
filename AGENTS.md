@@ -16,6 +16,8 @@ Consumer wiring and rollout remain separate changes in those repositories.
 - `policies/<category>/<policy>.yaml` — one policy per file.
 - `tests/<policy>/kyverno-test.yaml` — Kyverno CLI behavior contract.
 - `tests/<policy>/generated-*.yaml` — exact generated-resource fixtures.
+- `tests/<policy>/consumer/` and `tests/<policy>/consumer-parity-test.yaml` — an example consumer overlay and the
+  consumer's own test cases, rendered and run by `scripts/test-policy-catalog.sh` (not by `kyverno test .`).
 - `kustomization.yaml` — root catalog; every published policy must be listed.
 - `scripts/test-policy-catalog.sh` — structural invariants `kyverno test` cannot express.
 

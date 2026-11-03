@@ -1,0 +1,32 @@
+---
+# The catalog validate-pod-security without a consumer exception (#46). It skips only the
+# namespaces Kubernetes owns: a namespace the platform exempts through its own exception is in
+# scope here, so its insecure pod is denied.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: validate-pod-security-catalog-scope
+policies:
+  - ../../policies/security/validate-pod-security.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: validate-pod-security
+    isValidatingPolicy: true
+    kind: Pod
+    resources:
+      - observability/hardened
+    result: pass
+  - policy: validate-pod-security
+    isValidatingPolicy: true
+    kind: Pod
+    resources:
+      - observability/insecure
+    result: fail
+  - policy: validate-pod-security
+    isValidatingPolicy: true
+    kind: Pod
+    resources:
+      - kube-system/insecure
+      - kube-node-lease/insecure
+    result: skip

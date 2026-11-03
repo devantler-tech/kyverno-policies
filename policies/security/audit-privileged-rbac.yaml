@@ -1,0 +1,101 @@
+---
+# Denies Roles and ClusterRoles that grant wildcard administration or effective bind, escalate or
+# impersonate permissions, including grants expressed through wildcard verbs. Graduated from
+# devantler-tech/platform's audit-privileged-rbac (#46) with the same check, message, match scope,
+# Deny action and failure policy; the platform's reviewed identities moved out to the consumer.
+# The name stays audit-privileged-rbac, as in the platform, so reports and references continue.
+#
+# EXCLUSIONS. Each reviewed exclusion is an exact kind|namespace|name identity (namespace empty for
+# a ClusterRole), so a different object cannot borrow an exclusion by reusing a name in another
+# namespace or as another kind. Here the list holds only the roles the Kubernetes API server
+# bootstraps and its clusterrole aggregation controller rewrites. The exclusion is folded into the
+# validation rather than matchConditions so a background scan records a current pass for an
+# accepted role; a false matchConditions entry records nothing, which would leave a role's earlier
+# failure in its report. A consumer adds its own reviewed identities (controllers that create and
+# bind RBAC, for example) by replacing this one variable, which stays first so the patch path is
+# stable (scripts/test-policy-catalog.sh pins it). Keep the built-ins in the replacement:
+#
+#   - op: replace
+#     path: /spec/variables/0/expression
+#     value: "['ClusterRole||admin', ..., 'ClusterRole||<your reviewed role>']"
+#
+# A chart change that renames an excluded role, or adds a new privileged role, is refused at
+# admission until the new role is reviewed into the consumer's list.
+#
+# COVERAGE LIMIT. Kyverno's own resource filters skip its namespace and its controller roles for
+# every policy, and admission webhooks commonly skip kube-system, so a privileged grant created
+# there is evaluated only by background scans, if at all.
+#
+# FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: audit-privileged-rbac
+  annotations:
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/title: Restrict Privileged RBAC
+    policies.kyverno.io/category: Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Role, ClusterRole
+    policies.kyverno.io/description: >-
+      Rejects Roles and ClusterRoles that grant wildcard administration or
+      effective bind, escalate, or impersonate permissions, including grants
+      expressed through wildcard verbs, unless the object is a reviewed
+      exclusion.
+spec:
+  failurePolicy: Fail
+  validationActions:
+    - Deny
+  evaluation:
+    background:
+      enabled: true
+  # Removing a role grants nothing, so a DELETE is not judged.
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["roles", "clusterroles"]
+  variables:
+    # Keep first: consumers replace /spec/variables/0/expression to add their reviewed identities.
+    - name: reviewedExclusions
+      expression: |-
+        [
+          // Kubernetes built-ins. The API server bootstraps them, and the
+          // clusterrole aggregation controller rewrites the aggregated rules.
+          'ClusterRole||admin',
+          'ClusterRole||cluster-admin',
+          'ClusterRole||edit',
+          'ClusterRole||system:aggregate-to-edit',
+          'ClusterRole||system:controller:clusterrole-aggregation-controller'
+        ]
+    - name: reviewed
+      expression: >-
+        (object.kind + '|' + object.metadata.?namespace.orValue('') + '|' + object.metadata.name)
+        in variables.reviewedExclusions
+  validations:
+    - expression: >-
+        variables.reviewed ||
+        !has(object.rules) || type(object.rules) == null_type || object.rules.all(rule,
+          !(has(rule.apiGroups) && has(rule.resources) && (
+            ('*' in rule.apiGroups && '*' in rule.resources && '*' in rule.verbs) ||
+            (('*' in rule.apiGroups || 'rbac.authorization.k8s.io' in rule.apiGroups) &&
+             ((('*' in rule.verbs || 'bind' in rule.verbs) &&
+               ('*' in rule.resources || 'roles' in rule.resources || 'clusterroles' in rule.resources)) ||
+              (('*' in rule.verbs || 'escalate' in rule.verbs) &&
+               ('*' in rule.resources || 'roles' in rule.resources ||
+                (object.kind == 'ClusterRole' && 'clusterroles' in rule.resources))))) ||
+            (('*' in rule.apiGroups || '' in rule.apiGroups) &&
+             ('*' in rule.resources || 'serviceaccounts' in rule.resources ||
+              (object.kind == 'ClusterRole' && ('users' in rule.resources || 'groups' in rule.resources))) &&
+             ('*' in rule.verbs || 'impersonate' in rule.verbs)) ||
+            (object.kind == 'ClusterRole' &&
+             ('*' in rule.apiGroups || 'authentication.k8s.io' in rule.apiGroups) &&
+             rule.resources.exists(resource, resource == '*' || resource == 'uids' ||
+               resource.startsWith('userextras/') || resource.startsWith('*/')) &&
+             ('*' in rule.verbs || 'impersonate' in rule.verbs))
+          )))
+      message: >-
+        Wildcard administration, RBAC bind/escalate, and identity
+        impersonation grants are rejected unless the object is a
+        reviewed exclusion in the audit-privileged-rbac policy.

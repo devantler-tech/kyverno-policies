@@ -1,0 +1,57 @@
+---
+# The catalog policy's own scope, without any consumer exception: only the Kubernetes-owned
+# namespaces are skipped. The same insecure pod is skipped in kube-system and denied in a namespace
+# a consumer may exempt but the catalog does not, and a hardened pod passes there.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: insecure
+  namespace: kube-system
+spec:
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      securityContext:
+        privileged: true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: insecure
+  namespace: kube-node-lease
+spec:
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      securityContext:
+        privileged: true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: insecure
+  namespace: observability
+spec:
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      securityContext:
+        privileged: true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hardened
+  namespace: observability
+spec:
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        capabilities:
+          drop: ["ALL"]
