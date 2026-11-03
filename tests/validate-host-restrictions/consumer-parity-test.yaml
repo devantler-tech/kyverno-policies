@@ -1,0 +1,54 @@
+---
+# The platform's own validate-host-restrictions test (devantler-tech/platform
+# tests/validate-host-restrictions, at the commit named in resources.yaml), unchanged in every
+# expected result. scripts/test-policy-catalog.sh copies it beside the rendered consumer overlay
+# (consumer/) as policy.yaml and runs it. It is not named kyverno-test.yaml, so `kyverno test .`
+# does not run it against the unrendered catalog policy.
+# Pins the policy's behaviour across its ValidatingPolicy rewrite (#4996).
+# A ValidatingPolicy reports one result per resource, so each case below is the
+# combined outcome of the three checks: host paths, host namespaces, and
+# hostUsers in a namespace opted into user namespaces.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: validate-host-restrictions
+policies:
+  - policy.yaml
+resources:
+  - resources.yaml
+# Declares the namespace labels the hostUsers check reads. Without it the
+# opted-in namespace looks unlabelled and the hostUsers fail case would pass.
+variables: values.yaml
+results:
+  # No host access, and hostUsers absent or explicitly false. CNPG pods and
+  # namespaces without the opt-in label are out of the hostUsers check's scope,
+  # and infrastructure namespaces are out of the host-access checks' scope.
+  - policy: validate-host-restrictions
+    resources:
+      - userns-absent/ordinary-pod
+      - userns-absent/explicit-false
+      - userns-absent/unscoped-host-users
+      - userns-enabled/explicit-unshared
+      - userns-enabled/host-users-absent
+      - userns-enabled/cnpg-instance
+      - observability/infrastructure-pod
+    kind: Pod
+    result: pass
+  # Host access outside the infrastructure namespaces, including a namespace
+  # whose name only starts like an infrastructure one.
+  - policy: validate-host-restrictions
+    resources:
+      - userns-absent/host-path
+      - userns-absent/host-network
+      - userns-absent/host-pid
+      - userns-absent/host-ipc
+      - userns-absent/helper-pod-create-pvc
+      - observability-app/namespace-lookalike
+    kind: Pod
+    result: fail
+  # The regression the mutate rule's conditional anchor cannot catch.
+  - policy: validate-host-restrictions
+    resources:
+      - userns-enabled/explicit-host-users
+    kind: Pod
+    result: fail

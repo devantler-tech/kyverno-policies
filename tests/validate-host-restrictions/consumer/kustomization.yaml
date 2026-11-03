@@ -1,0 +1,27 @@
+---
+# An example consumer overlay, and the platform's own: devantler-tech/platform's infrastructure
+# namespaces applied to the catalog policy's host-access exclusion as a patch. The `test` operation
+# makes the patch fail to apply if the catalog ever moves the variable, instead of replacing the
+# wrong one. scripts/test-policy-catalog.sh renders this overlay and runs the platform's own test
+# cases against it (consumer-parity-test.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # A real consumer references the catalog file at a pinned revision instead, as a remote URL.
+  - ../../../policies/security/validate-host-restrictions.yaml
+patches:
+  - target:
+      group: policies.kyverno.io
+      version: v1
+      kind: ValidatingPolicy
+      name: validate-host-restrictions
+    patch: |-
+      - op: test
+        path: /spec/variables/0/name
+        value: excludedNamespaces
+      - op: replace
+        path: /spec/variables/0/expression
+        value: >-
+          ['kube-system', 'kube-public', 'kube-node-lease', 'flux-system',
+          'longhorn-system', 'local-path-storage', 'kubescape', 'kubevirt',
+          'cdi', 'observability', 'velero', 'chaos-mesh']

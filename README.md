@@ -33,12 +33,16 @@ guide do not grant unrestricted reuse or redistribution rights.
 | Policy | Behavior | Prerequisites |
 |---|---|---|
 | [`add-recommended-labels`](policies/best-practices/add-recommended-labels-mutating-policy.yaml) | Adds missing Kubernetes identity labels to Deployments, StatefulSets, and DaemonSets without replacing authored values | Kyverno 1.19+ and admission processing that includes the target workload |
+| [`audit-privileged-rbac`](policies/security/audit-privileged-rbac.yaml) | Denies Roles and ClusterRoles that grant wildcard administration or effective bind, escalate or impersonate permissions, except reviewed identities | Kyverno 1.19+, admission processing that includes RBAC objects, and the consumer's reviewed identities patched in (see [Platform validation policies](#platform-validation-policies)) |
 | [`auto-vpa`](policies/best-practices/auto-vpa-generating-policy.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.19+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
 | [`disallow-latest-tag`](policies/best-practices/disallow-latest-tag-validating-policy.yaml) | Audits Pod images that are pinned by neither a tag nor a digest, or that use the mutable `:latest` tag | Kyverno 1.19+ and admission/background processing that includes Pods |
 | [`enforce-flux-best-practices`](policies/flux/enforce-flux-best-practices-validating-policy.yaml) | Validates reliability settings on Flux Kustomizations and HelmReleases | Kyverno 1.19+ and the Flux Kustomization v1 and HelmRelease v2 CRDs |
 | [`helm-release-enable-tests`](policies/flux/helm-release-enable-tests-mutating-policy.yaml) | Enables Helm test actions for explicitly labelled Flux HelmReleases | Kyverno 1.19+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
 | [`helm-release-install-crds`](policies/flux/helm-release-install-crds-mutating-policy.yaml) | Creates and replaces chart CRDs for explicitly labelled Flux HelmReleases | Kyverno 1.19+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
 | [`helm-release-remediation-retries`](policies/flux/helm-release-remediation-retries-mutating-policy.yaml) | Supplies safe install and upgrade remediation defaults for explicitly labelled Flux HelmReleases | Kyverno 1.19+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
+| [`validate-host-restrictions`](policies/security/validate-host-restrictions.yaml) | Denies hostPath volumes, hostNetwork, hostPID and hostIPC, and an explicit `hostUsers: true` in a namespace opted into user namespaces | Kyverno 1.19+, admission processing that includes Pods, and the consumer's infrastructure namespaces patched in |
+| [`validate-pdb-drain-safe`](policies/best-practices/validate-pdb-drain-safe.yaml) | Audits PodDisruptionBudgets that set `minAvailable` instead of the drain-safe `maxUnavailable` | Kyverno 1.19+ and a consumer `PolicyException` for operator-owned PDBs |
+| [`validate-pod-security`](policies/security/validate-pod-security.yaml) | Denies pods and workload pod templates that override the Pod Security Standards restricted profile | Kyverno 1.19+, admission processing that includes Pods and workload controllers, and a consumer `PolicyException` for infrastructure namespaces |
 
 ## Image tag behavior
 
@@ -189,6 +193,53 @@ follows step 2 first, so that no workload ends up with two VPAs. The migration i
 One translation note for anyone extending it: CEL infers a map's value type from its first entry, so
 resource literals wrap every value in `dyn(...)`, and fields read off `object` need `string(...)` before
 being concatenated.
+
+## Platform validation policies
+
+`validate-pod-security`, `validate-host-restrictions`, `audit-privileged-rbac` and
+`validate-pdb-drain-safe` graduated from devantler-tech/platform's own `ValidatingPolicy` copies, with
+the same checks, messages, match scope and failure actions (`Deny` for the first three, `Audit` for the
+PDB check). `validate-pod-security` is stricter than the platform's copy in two ways: it denies a
+capability added back after dropping `ALL` (the restricted profile allows only `NET_BIND_SERVICE`),
+and it also matches the `pods/ephemeralcontainers` subresource, through which a debug container is
+added to a running Pod.
+
+What moved out is everything specific to one platform: its infrastructure namespaces, its reviewed
+controller roles and the operator-owned PDBs it accepts. The catalog copies exclude only what
+Kubernetes itself owns, so **a consumer must add its own exclusions before it adopts them**: the
+`Deny` policies otherwise refuse that consumer's own infrastructure at admission.
+
+Each policy takes exclusions the way its reports need them:
+
+- **`validate-pod-security` and `validate-pdb-drain-safe`: a `PolicyException`.** Add a
+  `policies.kyverno.io/v1` `PolicyException` whose `policyRefs` name the policy and whose
+  `matchConditions` select what it exempts. An exempt resource reports `skip`. The platform's own
+  exceptions are the examples:
+  [pod security](tests/validate-pod-security/consumer-exception.yaml) and
+  [drain-safe PDBs](tests/validate-pdb-drain-safe/consumer-exception.yaml). Exclude pods by namespace,
+  never by name alone, since any pod can take a name in any namespace.
+- **`validate-host-restrictions` and `audit-privileged-rbac`: a patch to the policy's first variable.**
+  These evaluate their exclusions inside the policy, so a background scan records a current `pass`
+  for an exempt object instead of leaving an earlier failure in its report. Replace
+  `/spec/variables/0/expression` with your full list, `excludedNamespaces` for host access and
+  `reviewedExclusions` (exact `kind|namespace|name` identities) for RBAC, and keep a `test` operation
+  on `/spec/variables/0/name` so the patch fails to apply rather than replacing the wrong variable if
+  the catalog ever moves it. Keep the catalog's defaults in your list. The platform's own overlays are
+  the examples: [host access](tests/validate-host-restrictions/consumer/kustomization.yaml) and
+  [RBAC](tests/audit-privileged-rbac/consumer/kustomization.yaml).
+
+`validate-host-restrictions` also denies an explicit `hostUsers: true` in a namespace labelled
+`pod-security.devantler.tech/user-namespaces: enabled`. Pair that label with a mutation that sets
+`hostUsers: false` where the field is absent; CloudNativePG instance pods (`cnpg.io/cluster`) are out of
+that check's scope.
+
+The tests hold the catalog copies to the platform's decisions twice. `tests/<policy>/kyverno-test.yaml`
+runs the platform's fixtures, copied unchanged, against the catalog copy: with the platform's exception
+for the two `PolicyException` policies, and without any consumer list for the two patched ones, where
+the platform-only exemptions are expected to fail. `tests/<policy>-catalog-scope` holds the two
+`PolicyException` policies to their own scope without an exception. `scripts/test-policy-catalog.sh` renders the two
+example overlays and runs the platform's own test cases against them unchanged
+(`tests/<policy>/consumer-parity-test.yaml`), and checks that the same cases fail without the overlay.
 
 ## Validate changes
 

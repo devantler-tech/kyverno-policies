@@ -1,0 +1,27 @@
+---
+# An example consumer exclusion, and the platform's own: the operator-owned PodDisruptionBudgets
+# devantler-tech/platform exempts from validate-pdb-drain-safe. CloudNativePG owns drain-safety for
+# its clusters; KSail installs cert-manager, metrics-server, Kyverno and the Hetzner CSI controller
+# with their default minAvailable PDBs before Flux; Longhorn manages its own instance-manager and
+# CSI PDBs in longhorn-system. A consumer applies its own exception like this one beside the catalog
+# policy; the catalog never registers it.
+apiVersion: policies.kyverno.io/v1
+kind: PolicyException
+metadata:
+  name: validate-pdb-drain-safe-operator-managed
+  namespace: kyverno
+spec:
+  policyRefs:
+    - name: validate-pdb-drain-safe
+      kind: ValidatingPolicy
+  matchConditions:
+    - name: operator-managed
+      expression: >-
+        'cnpg.io/cluster' in object.metadata.?labels.orValue({}) ||
+        object.metadata.name in [
+          'cert-manager', 'cert-manager-webhook', 'cert-manager-cainjector',
+          'metrics-server', 'kyverno-admission-controller',
+          'hcloud-csi-controller'] ||
+        (object.metadata.?namespace.orValue('') == 'longhorn-system' &&
+          (object.metadata.name.matches('^instance-manager-.+$') ||
+           object.metadata.name in ['csi-attacher', 'csi-provisioner']))

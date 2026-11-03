@@ -1,0 +1,37 @@
+---
+# The catalog policy's own scope, without any consumer exception: every PodDisruptionBudget is in
+# scope, including one an operator labels as its own.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: max-unavailable
+  namespace: apps
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: web
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: operator-labelled
+  namespace: apps
+  labels:
+    cnpg.io/cluster: database
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      cnpg.io/cluster: database
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cert-manager
+  namespace: cert-manager
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cert-manager

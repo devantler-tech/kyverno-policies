@@ -1,0 +1,54 @@
+---
+# Audits PodDisruptionBudgets that set spec.minAvailable, steering workloads to the drain-safe
+# pattern spec.maxUnavailable. Graduated from devantler-tech/platform's validate-pdb-drain-safe
+# (#46) with the same check, message and Audit action; the platform's operator exclusions moved
+# out to the consumer.
+#
+# A minAvailable PDB over a workload running fewer ready replicas than minAvailable permits zero
+# voluntary evictions, which makes every node hosting one of its pods undrainable: node recycles,
+# OS upgrades and autoscaler scale-down deadlock. maxUnavailable never deadlocks a drain because
+# the disruption controller evaluates it against the live replica count.
+#
+# Audit, not Deny: refusing minAvailable PDBs at admission would wedge reconciliation for any chart
+# or operator that ships one. The finding lands in a policy report for a human to assess.
+#
+# SCOPE. Every PodDisruptionBudget is in scope here. PDBs an operator legitimately owns with
+# minAvailable (for example CloudNativePG clusters, or PDBs an installer creates before GitOps
+# takes over) are the consumer's to exempt: add a policies.kyverno.io/v1 PolicyException whose
+# policyRefs name this policy (README, "Platform validation policies").
+#
+# FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: validate-pdb-drain-safe
+  annotations:
+    policies.kyverno.io/title: Validate Drain-Safe PodDisruptionBudgets
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: PodDisruptionBudget
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Flags PodDisruptionBudgets that set spec.minAvailable. Use
+      spec.maxUnavailable instead, which keeps nodes drainable at any replica
+      count; a minAvailable PDB over a low-replica workload can make its node
+      undrainable.
+spec:
+  validationActions:
+    - Audit
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["policy"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["poddisruptionbudgets"]
+  validations:
+    - expression: "!has(object.spec.minAvailable)"
+      messageExpression: >-
+        "PodDisruptionBudget '" + object.metadata.name + "' sets
+        spec.minAvailable. Use spec.maxUnavailable instead (e.g.
+        maxUnavailable: 1) so node drains are never deadlocked at low replica
+        counts."

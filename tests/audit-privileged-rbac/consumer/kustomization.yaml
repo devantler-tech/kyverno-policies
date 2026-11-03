@@ -1,0 +1,42 @@
+---
+# An example consumer overlay, and the platform's own reviewed identities: devantler-tech/platform's
+# audit-privileged-rbac exclusions applied to the catalog policy as a patch. The `test` operation
+# makes the patch fail to apply if the catalog ever moves the variable, instead of replacing the
+# wrong one. scripts/test-policy-catalog.sh renders this overlay and runs the platform's own test
+# cases against it (consumer-parity-test.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # A real consumer references the catalog file at a pinned revision instead, as a remote URL.
+  - ../../../policies/security/audit-privileged-rbac.yaml
+patches:
+  - target:
+      group: policies.kyverno.io
+      version: v1
+      kind: ValidatingPolicy
+      name: audit-privileged-rbac
+    patch: |-
+      - op: test
+        path: /spec/variables/0/name
+        value: reviewedExclusions
+      - op: replace
+        path: /spec/variables/0/expression
+        value: |-
+          [
+            // Kubernetes built-ins, kept from the catalog list.
+            'ClusterRole||admin',
+            'ClusterRole||cluster-admin',
+            'ClusterRole||edit',
+            'ClusterRole||system:aggregate-to-edit',
+            'ClusterRole||system:controller:clusterrole-aggregation-controller',
+            // The platform's reviewed controllers.
+            'ClusterRole||crossplane',
+            'ClusterRole||crossplane-rbac-manager',
+            'ClusterRole||crossplane:system:aggregate-to-crossplane',
+            'ClusterRole||kro-tenant-rgd',
+            'ClusterRole||kro:controller',
+            'ClusterRole||ksail-operator',
+            'ClusterRole||longhorn-role',
+            'Role|longhorn-system|longhorn',
+            'Role|velero|velero-server'
+          ]

@@ -1,0 +1,11 @@
+---
+# Catalog-scope fixtures (#46): Kubernetes' own aggregated role passes whatever it grants, because
+# the catalog's reviewed list keeps the API server's built-ins.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-admin
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]

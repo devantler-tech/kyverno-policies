@@ -1,0 +1,25 @@
+---
+# The catalog validate-pdb-drain-safe without a consumer exception (#46). The operator-owned PDBs
+# the platform exempts through its own exception are in scope here and fail.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: validate-pdb-drain-safe-catalog-scope
+policies:
+  - ../../policies/best-practices/validate-pdb-drain-safe.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: validate-pdb-drain-safe
+    isValidatingPolicy: true
+    kind: PodDisruptionBudget
+    resources:
+      - apps/max-unavailable
+    result: pass
+  - policy: validate-pdb-drain-safe
+    isValidatingPolicy: true
+    kind: PodDisruptionBudget
+    resources:
+      - apps/operator-labelled
+      - cert-manager/cert-manager
+    result: fail

@@ -1,0 +1,20 @@
+---
+# An example consumer exclusion, and the platform's own: the infrastructure namespaces
+# devantler-tech/platform exempts from validate-pod-security, beyond the Kubernetes-owned ones the
+# catalog policy already skips. A consumer applies its own exception like this one beside the
+# catalog policy; the catalog never registers it.
+apiVersion: policies.kyverno.io/v1
+kind: PolicyException
+metadata:
+  name: validate-pod-security-infrastructure-namespaces
+  namespace: kyverno
+spec:
+  policyRefs:
+    - name: validate-pod-security
+      kind: ValidatingPolicy
+  matchConditions:
+    - name: infrastructure-namespace
+      expression: >-
+        object.metadata.?namespace.orValue('') in [
+          'flux-system', 'longhorn-system', 'local-path-storage', 'kubescape',
+          'kubevirt', 'cdi', 'observability', 'velero', 'chaos-mesh']
