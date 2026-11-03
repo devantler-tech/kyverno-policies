@@ -3,6 +3,8 @@
 # Security Standards restricted profile. Graduated from devantler-tech/platform's
 # validate-pod-security (#46) with the same checks, messages, match scope and Deny action; the
 # platform's own namespace exclusions moved out to the consumer.
+# Two additions to the platform's copy: a capability added back after dropping ALL is denied
+# unless it is NET_BIND_SERVICE, and the pods/ephemeralcontainers subresource is matched.
 #
 # Controllers are matched directly, not through Kyverno's generated pod-controller rules (autogen
 # is off), because at Kyverno 1.19 those do not cover ReplicationController. `podSpec` picks the
@@ -49,6 +51,12 @@ spec:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["pods", "replicationcontrollers"]
+      # Ephemeral containers are added to a running Pod through this subresource, not through an
+      # update of the Pod itself, so without it a debug container would bypass every check below.
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["pods/ephemeralcontainers"]
       - apiGroups: ["apps"]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE"]
@@ -91,6 +99,14 @@ spec:
         All containers must set allowPrivilegeEscalation=false,
         privileged=false (or unset), runAsNonRoot=true, and drop
         ALL capabilities.
+    # Dropping ALL does not stop a container adding capabilities back. The restricted profile
+    # allows adding back only NET_BIND_SERVICE. This check is the catalog's addition to the
+    # platform's copy, which inspected only the drop list.
+    - expression: >-
+        variables.containers.all(c,
+          c.?securityContext.?capabilities.?add.orValue([]).all(a, a == 'NET_BIND_SERVICE'))
+      message: >-
+        Containers may add back only the NET_BIND_SERVICE capability.
     - expression: >-
         variables.podSpec.?securityContext.?seccompProfile.?type.orValue('')
         in variables.allowedSeccompTypes

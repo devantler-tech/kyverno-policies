@@ -1215,6 +1215,12 @@ assert_equal "$(yq -r '.spec.validationActions | join(",")' "${repo_root}/polici
   "validate-pdb-drain-safe must keep its Audit action"
 assert_equal "$(yq -r '.spec.failurePolicy' "${repo_root}/policies/security/audit-privileged-rbac.yaml")" "Fail" \
   "audit-privileged-rbac must keep failurePolicy Fail"
+# Ephemeral containers reach a running Pod only through the pods/ephemeralcontainers subresource.
+# The CLI evaluates objects, not subresource admission requests, so no fixture can exercise that
+# path: pin the match rule instead.
+assert_equal "$(yq -r '[.spec.matchConstraints.resourceRules[] | select((.resources | join(",")) == "pods/ephemeralcontainers" and (.operations | join(",")) == "UPDATE" and (.apiGroups | join(",")) == "")] | length' \
+  "${repo_root}/policies/security/validate-pod-security.yaml")" "1" \
+  "validate-pod-security must match UPDATE on the pods/ephemeralcontainers subresource"
 
 # Consumer parity: render each example consumer overlay (tests/<policy>/consumer), then run the
 # platform's own test cases (tests/<policy>/consumer-parity-test.yaml, unchanged in every expected

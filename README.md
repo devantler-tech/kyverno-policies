@@ -199,8 +199,13 @@ being concatenated.
 `validate-pod-security`, `validate-host-restrictions`, `audit-privileged-rbac` and
 `validate-pdb-drain-safe` graduated from devantler-tech/platform's own `ValidatingPolicy` copies, with
 the same checks, messages, match scope and failure actions (`Deny` for the first three, `Audit` for the
-PDB check). What moved out is everything specific to one platform: its infrastructure namespaces, its
-reviewed controller roles and the operator-owned PDBs it accepts. The catalog copies exclude only what
+PDB check). `validate-pod-security` is stricter than the platform's copy in two ways: it denies a
+capability added back after dropping `ALL` (the restricted profile allows only `NET_BIND_SERVICE`),
+and it also matches the `pods/ephemeralcontainers` subresource, through which a debug container is
+added to a running Pod.
+
+What moved out is everything specific to one platform: its infrastructure namespaces, its reviewed
+controller roles and the operator-owned PDBs it accepts. The catalog copies exclude only what
 Kubernetes itself owns, so **a consumer must add its own exclusions before it adopts them**: the
 `Deny` policies otherwise refuse that consumer's own infrastructure at admission.
 
