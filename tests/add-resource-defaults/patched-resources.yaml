@@ -1,0 +1,225 @@
+# Every apps-namespace resource in resources.yaml after add-resource-defaults. Each equals the
+# platform's classic policy output on the same input (compared with kyverno apply when the policy
+# was ported, #47), except that the classic CLI moved a patched container ahead of its siblings
+# while this form keeps the authored order.
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bare
+  namespace: apps
+spec:
+  containers:
+    - image: registry.k8s.io/pause:3.10
+      name: app
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 15m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: empty-resources
+  namespace: apps
+spec:
+  containers:
+    - image: registry.k8s.io/pause:3.10
+      name: app
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 15m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: requests-only
+  namespace: apps
+spec:
+  containers:
+    - image: registry.k8s.io/pause:3.10
+      name: app
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 100m
+          memory: 64Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: limits-only
+  namespace: apps
+spec:
+  containers:
+    - image: registry.k8s.io/pause:3.10
+      name: app
+      resources:
+        limits:
+          cpu: "1"
+          memory: 1Gi
+        requests:
+          cpu: 15m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: partial-requests
+  namespace: apps
+spec:
+  containers:
+    - image: registry.k8s.io/pause:3.10
+      name: app
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 100m
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: complete
+  namespace: apps
+spec:
+  containers:
+    - image: registry.k8s.io/pause:3.10
+      name: app
+      resources:
+        limits:
+          cpu: "1"
+          memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 64Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mixed-with-init
+  namespace: apps
+spec:
+  containers:
+    - image: registry.k8s.io/pause:3.10
+      name: complete
+      resources:
+        limits:
+          cpu: "1"
+          memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 64Mi
+    - image: registry.k8s.io/pause:3.10
+      name: bare
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 15m
+          memory: 128Mi
+  initContainers:
+    - image: registry.k8s.io/pause:3.10
+      name: setup
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 15m
+          memory: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bare
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bare
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bare
+    spec:
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 15m
+              memory: 128Mi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: with-init
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: with-init
+  serviceName: with-init
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: with-init
+    spec:
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 15m
+              memory: 128Mi
+      initContainers:
+        - image: registry.k8s.io/pause:3.10
+          name: setup
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 15m
+              memory: 128Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: bare
+  namespace: apps
+spec:
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - image: registry.k8s.io/pause:3.10
+              name: app
+              resources:
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+                requests:
+                  cpu: 15m
+                  memory: 128Mi
+          restartPolicy: Never
+  schedule: 0 * * * *

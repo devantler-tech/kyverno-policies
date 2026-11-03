@@ -1,0 +1,32 @@
+---
+# spread-pods adds its node topology spread constraint to every named workload's pod template that
+# declares none, whatever its distributed label says; existing constraints are kept exactly as
+# authored. The unnamed workload and the one in kube-system report Excluded, which a `skip` row
+# cannot tell apart from a broken policy, so scripts/test-policy-catalog.sh checks them with kyverno
+# apply instead.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: spread-pods
+policies:
+  - ../../policies/best-practices/spread-pods.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: spread-pods
+    isMutatingPolicy: true
+    resources:
+      - apps/opted-in
+      - apps/own-constraints
+      - apps/not-opted-in
+      - apps/other-value
+    patchedResources: patched-resources.yaml
+    kind: Deployment
+    result: pass
+  - policy: spread-pods
+    isMutatingPolicy: true
+    resources:
+      - apps/opted-in-sts
+    patchedResources: patched-resources.yaml
+    kind: StatefulSet
+    result: pass

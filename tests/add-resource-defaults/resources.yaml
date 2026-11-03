@@ -1,0 +1,173 @@
+---
+# Containers with and without requests and limits, in each kind the policy reaches, and one Pod in
+# a Kubernetes-owned namespace it must leave alone.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bare
+  namespace: apps
+spec:
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: empty-resources
+  namespace: apps
+spec:
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      resources: {}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: requests-only
+  namespace: apps
+spec:
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: limits-only
+  namespace: apps
+spec:
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      resources:
+        limits:
+          cpu: "1"
+          memory: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: partial-requests
+  namespace: apps
+spec:
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      resources:
+        requests:
+          cpu: 100m
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: complete
+  namespace: apps
+spec:
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          cpu: "1"
+          memory: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mixed-with-init
+  namespace: apps
+spec:
+  initContainers:
+    - name: setup
+      image: registry.k8s.io/pause:3.10
+  containers:
+    - name: complete
+      image: registry.k8s.io/pause:3.10
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          cpu: "1"
+          memory: 1Gi
+    - name: bare
+      image: registry.k8s.io/pause:3.10
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bare
+  namespace: kube-system
+spec:
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bare
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bare
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bare
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: with-init
+  namespace: apps
+spec:
+  serviceName: with-init
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: with-init
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: with-init
+    spec:
+      initContainers:
+        - name: setup
+          image: registry.k8s.io/pause:3.10
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: bare
+  namespace: apps
+spec:
+  schedule: "0 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: app
+              image: registry.k8s.io/pause:3.10

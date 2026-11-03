@@ -1,0 +1,31 @@
+---
+# insert-pod-antiaffinity adds its preferred node anti-affinity only to a named workload's pod
+# template that has no affinity at all; any existing affinity is kept exactly as authored. The
+# unnamed workload and the one in kube-system report Excluded, which a `skip` row cannot tell apart
+# from a broken policy, so scripts/test-policy-catalog.sh checks them with kyverno apply instead.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: insert-pod-antiaffinity
+policies:
+  - ../../policies/best-practices/insert-pod-antiaffinity.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: insert-pod-antiaffinity
+    isMutatingPolicy: true
+    resources:
+      - apps/no-affinity
+      - apps/node-affinity-only
+      - apps/required-anti-affinity
+      - apps/preferred-anti-affinity
+    patchedResources: patched-resources.yaml
+    kind: Deployment
+    result: pass
+  - policy: insert-pod-antiaffinity
+    isMutatingPolicy: true
+    resources:
+      - apps/no-affinity-sts
+    patchedResources: patched-resources.yaml
+    kind: StatefulSet
+    result: pass

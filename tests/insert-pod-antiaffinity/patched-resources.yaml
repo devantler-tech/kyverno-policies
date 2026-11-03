@@ -1,0 +1,149 @@
+# Every resource listed in kyverno-test.yaml after insert-pod-antiaffinity. Each equals the output of the
+# platform's classic policy on the same input (compared with kyverno apply when the policy was
+# ported, #47).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-affinity
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: no-affinity
+  template:
+    metadata:
+      labels:
+        app: no-affinity
+        app.kubernetes.io/name: web
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - web
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: no-affinity-sts
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: no-affinity-sts
+  serviceName: no-affinity-sts
+  template:
+    metadata:
+      labels:
+        app: no-affinity-sts
+        app.kubernetes.io/name: web
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - web
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-affinity-only
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: node-affinity-only
+  template:
+    metadata:
+      labels:
+        app: node-affinity-only
+        app.kubernetes.io/name: web
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - preference:
+                matchExpressions:
+                  - key: zone
+                    operator: In
+                    values:
+                      - a
+              weight: 1
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: required-anti-affinity
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: required-anti-affinity
+  template:
+    metadata:
+      labels:
+        app: required-anti-affinity
+        app.kubernetes.io/name: web
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: web
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: preferred-anti-affinity
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: preferred-anti-affinity
+  template:
+    metadata:
+      labels:
+        app: preferred-anti-affinity
+        app.kubernetes.io/name: web
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: web
+                topologyKey: topology.kubernetes.io/zone
+              weight: 50
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app

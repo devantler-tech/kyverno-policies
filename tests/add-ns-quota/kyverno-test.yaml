@@ -1,0 +1,19 @@
+---
+# The quota add-ns-quota generates for an ordinary namespace: requests only, at the platform's sizes.
+# Namespaces it must leave alone are checked with kyverno apply in scripts/test-policy-catalog.sh,
+# because the CLI expands a GeneratingPolicy's result rows across every resource in a test.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: add-ns-quota-generates-requests-quota
+policies:
+  - ../../policies/best-practices/add-ns-quota.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: add-ns-quota
+    resources:
+      - apps
+    generatedResource: generated-resourcequota.yaml
+    kind: Namespace
+    result: pass

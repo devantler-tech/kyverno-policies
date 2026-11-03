@@ -1,0 +1,49 @@
+---
+# add-resource-defaults on Pods and, through autogen, on Deployment, StatefulSet and CronJob pod
+# templates. Requests are added only to a container with no requests, limits only to one with no
+# limits, and authored values (including a partial requests map) are never changed. The Pod in
+# kube-system reports Excluded, which a `skip` row cannot tell apart from a broken policy, so
+# scripts/test-policy-catalog.sh checks it with kyverno apply instead.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: add-resource-defaults
+policies:
+  - ../../policies/best-practices/add-resource-defaults.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: add-resource-defaults
+    isMutatingPolicy: true
+    resources:
+      - apps/bare
+      - apps/empty-resources
+      - apps/requests-only
+      - apps/limits-only
+      - apps/partial-requests
+      - apps/complete
+      - apps/mixed-with-init
+    patchedResources: patched-resources.yaml
+    kind: Pod
+    result: pass
+  - policy: add-resource-defaults
+    isMutatingPolicy: true
+    resources:
+      - apps/bare
+    patchedResources: patched-resources.yaml
+    kind: Deployment
+    result: pass
+  - policy: add-resource-defaults
+    isMutatingPolicy: true
+    resources:
+      - apps/with-init
+    patchedResources: patched-resources.yaml
+    kind: StatefulSet
+    result: pass
+  - policy: add-resource-defaults
+    isMutatingPolicy: true
+    resources:
+      - apps/bare
+    patchedResources: patched-resources.yaml
+    kind: CronJob
+    result: pass

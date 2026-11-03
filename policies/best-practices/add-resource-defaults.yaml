@@ -1,0 +1,97 @@
+---
+# Gives every regular and init container that declares no resource requests, or no limits, the
+# default requests and limits. Graduated from devantler-tech/platform's classic
+# add-resource-defaults (#47) as a MutatingPolicy with the same values and the same per-field
+# behaviour as the classic conditional anchors: a container's requests are added only when it has
+# no requests at all, its limits only when it has no limits at all, and authored values are never
+# changed. The platform's own namespace exclusions moved out to the consumer.
+#
+# AUTOGEN. The classic policy matched Pods and Kyverno generated its pod-controller rules, so pod
+# templates of the controllers below are mutated too. A MutatingPolicy generates them only for the
+# controllers it names. Ephemeral containers are not touched, as in the classic policy.
+#
+# CONSUMER SETTINGS. The values are the first variable, so a consumer replaces
+# /spec/variables/0/expression to size them (README, "Platform default policies"). The catalog skips
+# only the namespaces Kubernetes owns; a consumer appends its own exclusions as another
+# matchCondition (op: add, path: /spec/matchConditions/-).
+#
+# FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin.
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: add-resource-defaults
+  annotations:
+    policies.kyverno.io/title: Add Container Resource Defaults (MutatingPolicy)
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Adds default CPU and memory requests to containers that declare no
+      requests, and default limits to containers that declare no limits,
+      without changing authored values.
+spec:
+  evaluation:
+    background:
+      enabled: true
+    mutateExisting:
+      enabled: false
+  autogen:
+    podControllers:
+      controllers:
+        - deployments
+        - statefulsets
+        - daemonsets
+        - replicasets
+        - jobs
+        - cronjobs
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  matchConditions:
+    - name: not-kubernetes-system-namespace
+      expression: >-
+        !(object.metadata.?namespace.orValue('') in ['kube-system', 'kube-public', 'kube-node-lease'])
+  variables:
+    # Keep first: consumers replace /spec/variables/0/expression to size the defaults.
+    - name: defaults
+      expression: >-
+        {
+          "requests": {"cpu": "15m", "memory": "128Mi"},
+          "limits": {"cpu": "500m", "memory": "512Mi"}
+        }
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: >-
+          Object{
+            spec: Object.spec{
+              containers: object.spec.containers.filter(c,
+                  !c.?resources.?requests.hasValue() || !c.?resources.?limits.hasValue()
+                ).map(c, Object.spec.containers{
+                  name: c.name,
+                  resources: Object.spec.containers.resources{
+                    ?requests: c.?resources.?requests.hasValue()
+                      ? optional.none() : optional.of(variables.defaults["requests"]),
+                    ?limits: c.?resources.?limits.hasValue()
+                      ? optional.none() : optional.of(variables.defaults["limits"])
+                  }
+                }),
+              ?initContainers: object.spec.?initContainers.hasValue()
+                ? optional.of(object.spec.initContainers.filter(c,
+                    !c.?resources.?requests.hasValue() || !c.?resources.?limits.hasValue()
+                  ).map(c, Object.spec.initContainers{
+                    name: c.name,
+                    resources: Object.spec.initContainers.resources{
+                      ?requests: c.?resources.?requests.hasValue()
+                        ? optional.none() : optional.of(variables.defaults["requests"]),
+                      ?limits: c.?resources.?limits.hasValue()
+                        ? optional.none() : optional.of(variables.defaults["limits"])
+                    }
+                  }))
+                : optional.none()
+            }
+          }

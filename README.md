@@ -32,14 +32,20 @@ guide do not grant unrestricted reuse or redistribution rights.
 
 | Policy | Behavior | Prerequisites |
 |---|---|---|
+| [`add-default-limitrange`](policies/best-practices/add-default-limitrange.yaml) | Generates a `default-limitrange` LimitRange with per-container request and limit defaults in every namespace | Kyverno 1.19+ and Kyverno background-controller RBAC for LimitRanges; see [Platform default policies](#platform-default-policies) |
+| [`add-ns-quota`](policies/best-practices/add-ns-quota.yaml) | Generates a `default-resourcequota` ResourceQuota bounding requested CPU and memory in every namespace | Kyverno 1.19+ and Kyverno background-controller RBAC for ResourceQuotas |
 | [`add-recommended-labels`](policies/best-practices/add-recommended-labels-mutating-policy.yaml) | Adds missing Kubernetes identity labels to Deployments, StatefulSets, and DaemonSets without replacing authored values | Kyverno 1.19+ and admission processing that includes the target workload |
+| [`add-resource-defaults`](policies/best-practices/add-resource-defaults.yaml) | Adds default requests and limits to containers that declare none, in Pods and workload pod templates | Kyverno 1.19+ and admission processing that includes Pods and workload controllers |
 | [`audit-privileged-rbac`](policies/security/audit-privileged-rbac.yaml) | Denies Roles and ClusterRoles that grant wildcard administration or effective bind, escalate or impersonate permissions, except reviewed identities | Kyverno 1.19+, admission processing that includes RBAC objects, and the consumer's reviewed identities patched in (see [Platform validation policies](#platform-validation-policies)) |
 | [`auto-vpa`](policies/best-practices/auto-vpa-generating-policy.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.19+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
+| [`disable-default-sa-automount`](policies/best-practices/disable-default-sa-automount.yaml) | Turns off the API token mount on every namespace's `default` ServiceAccount, including existing ones | Kyverno 1.19+ and Kyverno background-controller RBAC to update ServiceAccounts |
 | [`disallow-latest-tag`](policies/best-practices/disallow-latest-tag-validating-policy.yaml) | Audits Pod images that are pinned by neither a tag nor a digest, or that use the mutable `:latest` tag | Kyverno 1.19+ and admission/background processing that includes Pods |
 | [`enforce-flux-best-practices`](policies/flux/enforce-flux-best-practices-validating-policy.yaml) | Validates reliability settings on Flux Kustomizations and HelmReleases | Kyverno 1.19+ and the Flux Kustomization v1 and HelmRelease v2 CRDs |
 | [`helm-release-enable-tests`](policies/flux/helm-release-enable-tests-mutating-policy.yaml) | Enables Helm test actions for explicitly labelled Flux HelmReleases | Kyverno 1.19+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
 | [`helm-release-install-crds`](policies/flux/helm-release-install-crds-mutating-policy.yaml) | Creates and replaces chart CRDs for explicitly labelled Flux HelmReleases | Kyverno 1.19+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
 | [`helm-release-remediation-retries`](policies/flux/helm-release-remediation-retries-mutating-policy.yaml) | Supplies safe install and upgrade remediation defaults for explicitly labelled Flux HelmReleases | Kyverno 1.19+, the Flux HelmRelease v2 CRD, and admission filters which permit the target resource |
+| [`insert-pod-antiaffinity`](policies/best-practices/insert-pod-antiaffinity.yaml) | Adds a preferred node anti-affinity to named Deployments and StatefulSets without an affinity | Kyverno 1.19+ and admission processing that includes Deployments and StatefulSets |
+| [`spread-pods`](policies/best-practices/spread-pods.yaml) | Adds a hard node topology spread constraint to named Deployments and StatefulSets without one | Kyverno 1.19+ and admission processing that includes Deployments and StatefulSets |
 | [`validate-host-restrictions`](policies/security/validate-host-restrictions.yaml) | Denies hostPath volumes, hostNetwork, hostPID and hostIPC, and an explicit `hostUsers: true` in a namespace opted into user namespaces | Kyverno 1.19+, admission processing that includes Pods, and the consumer's infrastructure namespaces patched in |
 | [`validate-pdb-drain-safe`](policies/best-practices/validate-pdb-drain-safe.yaml) | Audits PodDisruptionBudgets that set `minAvailable` instead of the drain-safe `maxUnavailable` | Kyverno 1.19+ and a consumer `PolicyException` for operator-owned PDBs |
 | [`validate-pod-security`](policies/security/validate-pod-security.yaml) | Denies pods and workload pod templates that override the Pod Security Standards restricted profile | Kyverno 1.19+, admission processing that includes Pods and workload controllers, and a consumer `PolicyException` for infrastructure namespaces |
@@ -240,6 +246,49 @@ the platform-only exemptions are expected to fail. `tests/<policy>-catalog-scope
 `PolicyException` policies to their own scope without an exception. `scripts/test-policy-catalog.sh` renders the two
 example overlays and runs the platform's own test cases against them unchanged
 (`tests/<policy>/consumer-parity-test.yaml`), and checks that the same cases fail without the overlay.
+
+## Platform default policies
+
+`add-default-limitrange`, `add-ns-quota`, `add-resource-defaults`, `disable-default-sa-automount`,
+`insert-pod-antiaffinity` and `spread-pods` graduated from devantler-tech/platform's classic policies as
+CEL kinds. Each port reproduces the platform's **rendered** policy (its patches applied), not the
+upstream sample some of them started from, so for example `spread-pods` acts on every named workload:
+the platform's patches removed the sample's `distributed: required` opt-in. When they were ported, each
+was run with `kyverno apply` beside the platform's rendered classic policy on the fixtures under
+`tests/`, and every resource ended in the same state, except that the classic CLI moved a patched
+container ahead of its siblings where `add-resource-defaults` keeps the authored order.
+
+What a consumer sets:
+
+| Policy | Values (the policy's first variable) | Defaults |
+|---|---|---|
+| `add-default-limitrange` | `limits`: the LimitRange's `default` and `defaultRequest` | limit 500m CPU / 512Mi, request 15m CPU / 128Mi |
+| `add-ns-quota` | `hard`: the ResourceQuota's `spec.hard` | `requests.cpu: "8"`, `requests.memory: 16Gi`; requests only, so an autoscaler that raises limits is never refused |
+| `add-resource-defaults` | `defaults`: the `requests` and `limits` added to a container without them | the LimitRange defaults above |
+
+Replace `/spec/variables/0/expression` to change them, with a `test` operation on
+`/spec/variables/0/name` so the patch fails to apply if the catalog ever moves the variable. Every one of
+the six skips only the namespaces Kubernetes owns (`kube-system`, `kube-public`, `kube-node-lease`; the
+generate policies also skip a terminating namespace). Add your own exclusions as one more
+`matchCondition` (`op: add`, `path: /spec/matchConditions/-`), for example
+`!(object.metadata.name in ['flux-system'])` on a generate policy, whose trigger is the Namespace, or
+`!(object.metadata.?namespace.orValue('') in ['flux-system'])` on the others.
+
+**Switching over from a classic copy, per policy:**
+
+- **The generate policies** create objects with the platform's names (`default-limitrange`,
+  `default-resourcequota`). As with auto-vpa, never run both forms at once: remove the classic policy
+  first and let it reconcile (a synchronizing classic rule deletes what it generated unless it sets
+  `orphanDownstreamOnPolicyDelete: true`), then reference the catalog policy, which generates for every
+  existing namespace straight away. A namespace has no LimitRange or quota in between, so new pods there
+  get no defaults for that window.
+- **The mutate policies** can overlap safely: each adds a value only where it is missing, so a second
+  policy finds nothing left to add, and `disable-default-sa-automount` sets the same `false` either way.
+  Reference the catalog policy, check it reports, then remove the classic one.
+
+`disable-default-sa-automount` also updates existing default ServiceAccounts in the background, so
+Kyverno's background controller needs permission to update ServiceAccounts, as for the classic
+`mutateExistingOnPolicyUpdate`.
 
 ## Validate changes
 

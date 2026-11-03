@@ -1,0 +1,160 @@
+# Workloads with and without the app.kubernetes.io/name template label and with each level of an
+# existing affinity, plus kinds and namespaces the policy must leave alone.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-affinity
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: no-affinity
+  template:
+    metadata:
+      labels:
+        app: no-affinity
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: no-affinity-sts
+  namespace: apps
+spec:
+  serviceName: no-affinity-sts
+  selector:
+    matchLabels:
+      app: no-affinity-sts
+  template:
+    metadata:
+      labels:
+        app: no-affinity-sts
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-affinity-only
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: node-affinity-only
+  template:
+    metadata:
+      labels:
+        app: node-affinity-only
+        app.kubernetes.io/name: web
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              preference:
+                matchExpressions:
+                  - key: zone
+                    operator: In
+                    values: ["a"]
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: required-anti-affinity
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: required-anti-affinity
+  template:
+    metadata:
+      labels:
+        app: required-anti-affinity
+        app.kubernetes.io/name: web
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: web
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: preferred-anti-affinity
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: preferred-anti-affinity
+  template:
+    metadata:
+      labels:
+        app: preferred-anti-affinity
+        app.kubernetes.io/name: web
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              podAffinityTerm:
+                topologyKey: topology.kubernetes.io/zone
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: web
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unnamed
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: unnamed
+  template:
+    metadata:
+      labels:
+        app: unnamed
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: system
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: system
+  template:
+    metadata:
+      labels:
+        app: system
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
