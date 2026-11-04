@@ -1260,3 +1260,95 @@ for parity_policy in validate-host-restrictions audit-privileged-rbac; do
     exit 1
   fi
 done
+
+# ---------------------------------------------------------------------------------------------
+# Platform default policies graduated from devantler-tech/platform (#47).
+#
+# Consumers size these by replacing the FIRST variable, so pin that patch path.
+for sized in "add-default-limitrange:limits" "add-ns-quota:hard" "add-resource-defaults:defaults"; do
+  sized_policy="${sized%%:*}"
+  assert_equal "$(yq -r --no-doc 'select(.kind != null) | .spec.variables[0].name' "${repo_root}/policies/best-practices/${sized_policy}.yaml" | sort -u)" \
+    "${sized#*:}" "every policy in ${sized_policy}.yaml must keep its values as its first variable (the consumer patch path)"
+done
+# The ReplicationController companion must apply the same defaults as the Pod policy.
+resource_defaults_expressions="$(yq -o=json -I=0 --no-doc 'select(.kind != null) | .spec.variables[0].expression' \
+  "${repo_root}/policies/best-practices/add-resource-defaults.yaml")"
+assert_equal "$(printf '%s\n' "${resource_defaults_expressions}" | wc -l | tr -d ' ')" "2" \
+  "add-resource-defaults.yaml must hold the Pod policy and its ReplicationController companion"
+assert_equal "$(printf '%s\n' "${resource_defaults_expressions}" | sort -u | wc -l | tr -d ' ')" "1" \
+  "add-resource-defaults and its ReplicationController companion must declare identical defaults"
+# The classic add-resource-defaults matched Pods and Kyverno generated its pod-controller rules; a
+# MutatingPolicy generates them only for the controllers it names.
+assert_equal "$(yq -r --no-doc 'select(.metadata.name == "add-resource-defaults") | .spec.autogen.podControllers.controllers | sort | join(",")' \
+  "${repo_root}/policies/best-practices/add-resource-defaults.yaml")" \
+  "cronjobs,daemonsets,deployments,jobs,replicasets,statefulsets" \
+  "add-resource-defaults must keep the classic policy's pod-controller coverage"
+assert_equal "$(yq -r '.spec.evaluation.mutateExisting.enabled' \
+  "${repo_root}/policies/best-practices/disable-default-sa-automount.yaml")" "true" \
+  "disable-default-sa-automount must mutate existing ServiceAccounts, as the classic policy did"
+
+# Generate policies: one LimitRange or ResourceQuota for the ordinary namespace (the positive
+# control, which keeps an unparsed policy from passing the negative half vacuously) and none for a
+# Kubernetes-owned or terminating namespace.
+defaults_root="$(mktemp -d)"
+trap 'rm -rf "${ported_positive_dir}" "${ported_negative_dir}" "${ported_collision_dir}" "${parity_root}" "${defaults_root}"' EXIT
+for generate_policy in add-default-limitrange add-ns-quota; do
+  generate_out="${defaults_root}/${generate_policy}"
+  mkdir -p "${generate_out}"
+  kyverno apply "${repo_root}/policies/best-practices/${generate_policy}.yaml" \
+    --resource "${repo_root}/tests/platform-defaults-scope/namespaces.yaml" \
+    --output "${generate_out}" --remove-color >/dev/null
+  generated_namespaces="$(find "${generate_out}" -type f -exec yq -r --no-doc 'select(.kind != null) | .metadata.namespace' {} + | sort | tr '\n' ' ')"
+  assert_equal "${generated_namespaces}" "apps " \
+    "${generate_policy} must generate only for the ordinary namespace, not for kube-system, kube-node-lease or a terminating one"
+done
+
+# Mutate policies: the resources each policy must leave alone stay byte-for-byte unchanged, beside
+# at least one resource it does change.
+unchanged_after() {
+  local policy="$1" fixture="$2"
+  shift 2
+  local out key kind namespace name before after
+  out="${defaults_root}/$(basename "${policy}" .yaml).yaml"
+  kyverno apply "${policy}" --resource "${fixture}" -o "${out}" --remove-color >/dev/null
+  if ! grep -q . "${out}"; then
+    echo "FAIL: $(basename "${policy}") produced no output for ${fixture}" >&2
+    exit 1
+  fi
+  for key in "$@"; do
+    IFS=/ read -r kind namespace name <<<"${key}"
+    export kind namespace name
+    before="$(yq -o=json -I=0 --no-doc 'select(.kind == strenv(kind) and .metadata.namespace == strenv(namespace) and .metadata.name == strenv(name)) | sort_keys(..)' "${fixture}")"
+    after="$(yq -o=json -I=0 --no-doc 'select(.kind == strenv(kind) and .metadata.namespace == strenv(namespace) and .metadata.name == strenv(name)) | sort_keys(..)' "${out}" | tail -n 1)"
+    if [[ -z "${before}" ]]; then
+      echo "FAIL: fixture ${fixture} has no ${key}" >&2
+      exit 1
+    fi
+    if [[ -n "${after}" && "${after}" != "${before}" ]]; then
+      echo "FAIL: $(basename "${policy}") must leave ${key} unchanged" >&2
+      exit 1
+    fi
+  done
+}
+# A ServiceAccount created with generateName has no metadata.name at admission. The policy must
+# leave it alone without a CEL evaluation error, which would fail its admission.
+sa_apply_rc=0
+sa_apply_output="$(kyverno apply "${repo_root}/policies/best-practices/disable-default-sa-automount.yaml" \
+  --resource "${repo_root}/tests/disable-default-sa-automount/resources.yaml" --remove-color 2>&1)" || sa_apply_rc=$?
+if [[ "${sa_apply_rc}" -ne 0 ]] || ! grep -q 'error: 0,' <<<"${sa_apply_output}"; then
+  printf '%s\n' "${sa_apply_output}" >&2
+  echo "FAIL: disable-default-sa-automount must evaluate a generateName ServiceAccount without an error" >&2
+  exit 1
+fi
+unchanged_after "${repo_root}/policies/best-practices/disable-default-sa-automount.yaml" \
+  "${repo_root}/tests/disable-default-sa-automount/resources.yaml" \
+  ServiceAccount/apps/worker ServiceAccount/kube-system/default
+unchanged_after "${repo_root}/policies/best-practices/add-resource-defaults.yaml" \
+  "${repo_root}/tests/add-resource-defaults/resources.yaml" \
+  Pod/kube-system/bare Pod/apps/complete
+unchanged_after "${repo_root}/policies/best-practices/insert-pod-antiaffinity.yaml" \
+  "${repo_root}/tests/insert-pod-antiaffinity/resources.yaml" \
+  Deployment/apps/unnamed Deployment/kube-system/system
+unchanged_after "${repo_root}/policies/best-practices/spread-pods.yaml" \
+  "${repo_root}/tests/spread-pods/resources.yaml" \
+  Deployment/apps/opted-in-unnamed Deployment/kube-system/system

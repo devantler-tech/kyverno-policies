@@ -1,0 +1,48 @@
+---
+# Sets automountServiceAccountToken: false on every namespace's default ServiceAccount, so a pod
+# that binds no dedicated ServiceAccount gets no API token mounted. Graduated from
+# devantler-tech/platform's classic disable-default-sa-automount (#47) as a MutatingPolicy with the
+# same match, exclusions and override: an authored true on the default ServiceAccount is replaced.
+#
+# Existing ServiceAccounts are mutated too (evaluation.mutateExisting), as the classic
+# mutateExistingOnPolicyUpdate did, so adopting the policy reaches namespaces created before it.
+#
+# FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin.
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: disable-default-sa-automount
+  annotations:
+    policies.kyverno.io/title: Disable Default SA Automount (MutatingPolicy)
+    policies.kyverno.io/category: Pod Security, Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: ServiceAccount
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Forces every namespace's default ServiceAccount to disable
+      automountServiceAccountToken so pods that don't bind a dedicated
+      ServiceAccount don't get an API token mounted.
+spec:
+  evaluation:
+    background:
+      enabled: true
+    mutateExisting:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["serviceaccounts"]
+  matchConditions:
+    - name: default-service-account
+      # A ServiceAccount created with generateName has no name yet; it is not the default one.
+      expression: object.metadata.?name.orValue('') == 'default'
+    - name: not-kubernetes-system-namespace
+      expression: >-
+        !(object.metadata.?namespace.orValue('') in ['kube-system', 'kube-public', 'kube-node-lease'])
+  mutations:
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          [JSONPatch{op: "add", path: "/automountServiceAccountToken", value: false}]

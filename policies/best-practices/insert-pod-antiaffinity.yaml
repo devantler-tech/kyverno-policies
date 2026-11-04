@@ -1,0 +1,75 @@
+---
+# Prefers spreading a workload's replicas across nodes: adds a preferred pod anti-affinity on
+# kubernetes.io/hostname, keyed on the pod template's app.kubernetes.io/name label, to Deployments
+# and StatefulSets whose pod template has no affinity at all. Graduated from
+# devantler-tech/platform's insert-pod-antiaffinity (#47), which renders the upstream Kyverno sample
+# with the platform's patches, as a MutatingPolicy with the same match, condition and patch.
+#
+# Any existing affinity is left exactly as authored, as the classic `+(affinity)` anchor did: a
+# template with only a nodeAffinity, or with its own pod anti-affinity, gets nothing added.
+#
+# SCOPE. The catalog skips the namespaces Kubernetes owns (the platform's copy skipped kube-system);
+# a consumer appends its own exclusions as another matchCondition (op: add, path:
+# /spec/matchConditions/-).
+#
+# FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin.
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: insert-pod-antiaffinity
+  annotations:
+    policies.kyverno.io/title: Add Pod Anti-Affinity (MutatingPolicy)
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: Deployment, StatefulSet
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Adds a preferred pod anti-affinity across nodes to Deployments and
+      StatefulSets that carry an app.kubernetes.io/name pod template label and
+      declare no affinity.
+spec:
+  evaluation:
+    background:
+      enabled: true
+    mutateExisting:
+      enabled: false
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments", "statefulsets"]
+  matchConditions:
+    - name: not-kubernetes-system-namespace
+      expression: >-
+        !(object.metadata.?namespace.orValue('') in ['kube-system', 'kube-public', 'kube-node-lease'])
+    - name: has-name-label
+      expression: >-
+        object.spec.template.metadata.?labels[?'app.kubernetes.io/name'].orValue('') != ''
+  mutations:
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          object.spec.template.spec.?affinity.hasValue()
+          ? []
+          : [JSONPatch{
+              op: "add",
+              path: "/spec/template/spec/affinity",
+              value: {
+                "podAntiAffinity": dyn({
+                  "preferredDuringSchedulingIgnoredDuringExecution": dyn([{
+                    "weight": dyn(1),
+                    "podAffinityTerm": dyn({
+                      "topologyKey": dyn("kubernetes.io/hostname"),
+                      "labelSelector": dyn({
+                        "matchExpressions": dyn([{
+                          "key": dyn("app.kubernetes.io/name"),
+                          "operator": dyn("In"),
+                          "values": dyn([string(object.spec.template.metadata.labels['app.kubernetes.io/name'])])
+                        }])
+                      })
+                    })
+                  }])
+                })
+              }
+            }]

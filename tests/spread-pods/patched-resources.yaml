@@ -1,0 +1,162 @@
+# Every resource listed in kyverno-test.yaml after spread-pods. Each equals the output of the
+# platform's classic policy on the same input (compared with kyverno apply when the policy was
+# ported, #47).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    distributed: required
+  name: opted-in
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: opted-in
+  template:
+    metadata:
+      labels:
+        app: opted-in
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app
+      topologySpreadConstraints:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - web
+          matchLabelKeys:
+            - pod-template-hash
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    distributed: required
+  name: opted-in-sts
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: opted-in-sts
+  serviceName: opted-in-sts
+  template:
+    metadata:
+      labels:
+        app: opted-in-sts
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app
+      topologySpreadConstraints:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - web
+          matchLabelKeys:
+            - pod-template-hash
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    distributed: required
+  name: own-constraints
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: own-constraints
+  template:
+    metadata:
+      labels:
+        app: own-constraints
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app
+      topologySpreadConstraints:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: web
+          maxSkew: 2
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: not-opted-in
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: not-opted-in
+  template:
+    metadata:
+      labels:
+        app: not-opted-in
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app
+      topologySpreadConstraints:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - web
+          matchLabelKeys:
+            - pod-template-hash
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    distributed: preferred
+  name: other-value
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: other-value
+  template:
+    metadata:
+      labels:
+        app: other-value
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app
+      topologySpreadConstraints:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - web
+          matchLabelKeys:
+            - pod-template-hash
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule

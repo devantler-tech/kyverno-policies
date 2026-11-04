@@ -1,0 +1,21 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: apps
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: tokens-on
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: already-off
+automountServiceAccountToken: false

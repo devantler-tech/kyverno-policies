@@ -1,0 +1,81 @@
+---
+# Generates the default-limitrange LimitRange in every namespace, so containers that declare no
+# resources get request and limit defaults. Graduated from devantler-tech/platform's classic
+# add-default-limitrange (#47) as a GeneratingPolicy with the same object name, values, terminating-
+# namespace guard, synchronize and generateExisting; the platform's own namespace exclusions moved
+# out to the consumer.
+#
+# It is a policy of its own, apart from add-ns-quota: classic Kyverno evaluated every rule of a
+# policy against a trigger that matched any one of them, so a LimitRange rule and a ResourceQuota
+# rule with different exclusions reported errors for each other's namespaces.
+#
+# CONSUMER SETTINGS. The values are the first variable, so a consumer replaces
+# /spec/variables/0/expression to size them (README, "Platform default policies"). The catalog skips
+# only the namespaces Kubernetes owns; a consumer appends its own exclusions as another
+# matchCondition (op: add, path: /spec/matchConditions/-).
+#
+# FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin.
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: add-default-limitrange
+  annotations:
+    policies.kyverno.io/title: Add Default LimitRange (GeneratingPolicy)
+    policies.kyverno.io/category: Multi-Tenancy
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: LimitRange
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Generates the default-limitrange LimitRange, with per-container request
+      and limit defaults, in every namespace outside the Kubernetes-owned ones.
+spec:
+  evaluation:
+    generateExisting:
+      enabled: true
+    synchronize:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]
+  matchConditions:
+    - name: not-kubernetes-system-namespace
+      expression: >-
+        !(object.metadata.?name.orValue('') in ['kube-system', 'kube-public', 'kube-node-lease'])
+    # A terminating namespace rejects a new LimitRange, which Kyverno reports as a policy error.
+    - name: not-terminating
+      expression: "!has(object.metadata.deletionTimestamp)"
+  variables:
+    # Keep first: consumers replace /spec/variables/0/expression to size the defaults.
+    - name: limits
+      expression: >-
+        {
+          "default": {"cpu": "500m", "memory": "512Mi"},
+          "defaultRequest": {"cpu": "15m", "memory": "128Mi"}
+        }
+  generate:
+    - expression: >-
+        generator.Apply(
+          string(object.metadata.name),
+          [
+            {
+              "apiVersion": dyn("v1"),
+              "kind": dyn("LimitRange"),
+              "metadata": dyn({
+                "name": dyn("default-limitrange"),
+                "namespace": dyn(string(object.metadata.name))
+              }),
+              "spec": dyn({
+                "limits": [
+                  {
+                    "default": dyn(variables.limits["default"]),
+                    "defaultRequest": dyn(variables.limits["defaultRequest"]),
+                    "type": dyn("Container")
+                  }
+                ]
+              })
+            }
+          ]
+        )

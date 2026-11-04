@@ -1,0 +1,155 @@
+# Workloads with and without the app.kubernetes.io/name template label and existing spread
+# constraints, with and without the sample's distributed label (which no longer gates the policy),
+# and one in a Kubernetes-owned namespace.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opted-in
+  namespace: apps
+  labels:
+    distributed: required
+spec:
+  selector:
+    matchLabels:
+      app: opted-in
+  template:
+    metadata:
+      labels:
+        app: opted-in
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: opted-in-sts
+  namespace: apps
+  labels:
+    distributed: required
+spec:
+  serviceName: opted-in-sts
+  selector:
+    matchLabels:
+      app: opted-in-sts
+  template:
+    metadata:
+      labels:
+        app: opted-in-sts
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: own-constraints
+  namespace: apps
+  labels:
+    distributed: required
+spec:
+  selector:
+    matchLabels:
+      app: own-constraints
+  template:
+    metadata:
+      labels:
+        app: own-constraints
+        app.kubernetes.io/name: web
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 2
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: web
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opted-in-unnamed
+  namespace: apps
+  labels:
+    distributed: required
+spec:
+  selector:
+    matchLabels:
+      app: opted-in-unnamed
+  template:
+    metadata:
+      labels:
+        app: opted-in-unnamed
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: not-opted-in
+  namespace: apps
+spec:
+  selector:
+    matchLabels:
+      app: not-opted-in
+  template:
+    metadata:
+      labels:
+        app: not-opted-in
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: other-value
+  namespace: apps
+  labels:
+    distributed: preferred
+spec:
+  selector:
+    matchLabels:
+      app: other-value
+  template:
+    metadata:
+      labels:
+        app: other-value
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: system
+  namespace: kube-system
+  labels:
+    distributed: required
+spec:
+  selector:
+    matchLabels:
+      app: system
+  template:
+    metadata:
+      labels:
+        app: system
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10

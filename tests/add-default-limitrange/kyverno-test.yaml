@@ -1,0 +1,19 @@
+---
+# The LimitRange add-default-limitrange generates for an ordinary namespace, at the platform's sizes.
+# Namespaces it must leave alone are checked with kyverno apply in scripts/test-policy-catalog.sh,
+# because the CLI expands a GeneratingPolicy's result rows across every resource in a test.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: add-default-limitrange-generates-defaults
+policies:
+  - ../../policies/best-practices/add-default-limitrange.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: add-default-limitrange
+    resources:
+      - apps
+    generatedResource: generated-limitrange.yaml
+    kind: Namespace
+    result: pass

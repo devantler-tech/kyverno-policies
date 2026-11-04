@@ -1,0 +1,70 @@
+---
+# Generates the default-resourcequota ResourceQuota in every namespace, bounding the requests its
+# pods may reserve. Graduated from devantler-tech/platform's add-ns-quota (#47), which renders the
+# upstream Kyverno sample with the platform's patches, as a GeneratingPolicy with the same object
+# name, values, terminating-namespace guard, synchronize and generateExisting; the platform's own
+# namespace exclusions moved out to the consumer.
+#
+# Only the requests dimension is bounded. A consumer whose autoscaler raises container limits (for
+# example a VPA with controlledValues: RequestsAndLimits) would otherwise see the rollouts it
+# triggers rejected by a static limits quota.
+#
+# CONSUMER SETTINGS. The quota is the first variable, so a consumer replaces
+# /spec/variables/0/expression to size it (README, "Platform default policies"). The catalog skips
+# only the namespaces Kubernetes owns; a consumer appends its own exclusions as another
+# matchCondition (op: add, path: /spec/matchConditions/-).
+#
+# FLOOR: Kyverno 1.19.0, the CLI the behavior tests pin.
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: add-ns-quota
+  annotations:
+    policies.kyverno.io/title: Add Default ResourceQuota (GeneratingPolicy)
+    policies.kyverno.io/category: Multi-Tenancy
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: ResourceQuota
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Generates the default-resourcequota ResourceQuota, bounding requested CPU
+      and memory, in every namespace outside the Kubernetes-owned ones.
+spec:
+  evaluation:
+    generateExisting:
+      enabled: true
+    synchronize:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]
+  matchConditions:
+    - name: not-kubernetes-system-namespace
+      expression: >-
+        !(object.metadata.?name.orValue('') in ['kube-system', 'kube-public', 'kube-node-lease'])
+    # A terminating namespace rejects a new ResourceQuota, which Kyverno reports as a policy error.
+    - name: not-terminating
+      expression: "!has(object.metadata.deletionTimestamp)"
+  variables:
+    # Keep first: consumers replace /spec/variables/0/expression to size the quota.
+    - name: hard
+      expression: >-
+        {"requests.cpu": "8", "requests.memory": "16Gi"}
+  generate:
+    - expression: >-
+        generator.Apply(
+          string(object.metadata.name),
+          [
+            {
+              "apiVersion": dyn("v1"),
+              "kind": dyn("ResourceQuota"),
+              "metadata": dyn({
+                "name": dyn("default-resourcequota"),
+                "namespace": dyn(string(object.metadata.name))
+              }),
+              "spec": dyn({"hard": dyn(variables.hard)})
+            }
+          ]
+        )

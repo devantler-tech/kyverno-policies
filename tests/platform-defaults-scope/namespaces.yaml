@@ -1,0 +1,23 @@
+---
+# Namespaces the generate policies must leave alone, beside one they must act on (the positive
+# control, which keeps an unparsed policy from passing the negative checks vacuously).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-system
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-node-lease
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: terminating
+  deletionTimestamp: "2026-11-03T00:00:00Z"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: apps

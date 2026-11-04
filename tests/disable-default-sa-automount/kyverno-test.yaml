@@ -1,0 +1,23 @@
+---
+# disable-default-sa-automount turns the token mount off on every default ServiceAccount outside the
+# Kubernetes-owned namespaces, replacing an authored true. ServiceAccounts it must leave alone
+# report Excluded, which a `skip` row cannot tell apart from a broken policy, so
+# scripts/test-policy-catalog.sh checks them with kyverno apply instead.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: disable-default-sa-automount
+policies:
+  - ../../policies/best-practices/disable-default-sa-automount.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: disable-default-sa-automount
+    isMutatingPolicy: true
+    resources:
+      - apps/default
+      - tokens-on/default
+      - already-off/default
+    patchedResources: patched-resources.yaml
+    kind: ServiceAccount
+    result: pass

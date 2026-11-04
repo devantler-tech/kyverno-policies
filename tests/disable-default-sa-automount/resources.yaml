@@ -1,0 +1,41 @@
+---
+# A default ServiceAccount without the field, one that sets it to true, and one already false; a
+# ServiceAccount with another name, one created with generateName (no name yet) and a default
+# ServiceAccount in kube-system are left alone.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: apps
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: tokens-on
+automountServiceAccountToken: true
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: already-off
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: worker
+  namespace: apps
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  generateName: build-
+  namespace: apps
