@@ -36,7 +36,8 @@ spec:
         resources: ["serviceaccounts"]
   matchConditions:
     - name: default-service-account
-      expression: object.metadata.name == 'default'
+      # A ServiceAccount created with generateName has no name yet; it is not the default one.
+      expression: object.metadata.?name.orValue('') == 'default'
     - name: not-kubernetes-system-namespace
       expression: >-
         !(object.metadata.?namespace.orValue('') in ['kube-system', 'kube-public', 'kube-node-lease'])

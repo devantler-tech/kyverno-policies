@@ -1267,12 +1267,19 @@ done
 # Consumers size these by replacing the FIRST variable, so pin that patch path.
 for sized in "add-default-limitrange:limits" "add-ns-quota:hard" "add-resource-defaults:defaults"; do
   sized_policy="${sized%%:*}"
-  assert_equal "$(yq -r '.spec.variables[0].name' "${repo_root}/policies/best-practices/${sized_policy}.yaml")" \
-    "${sized#*:}" "${sized_policy} must keep its values as its first variable (the consumer patch path)"
+  assert_equal "$(yq -r --no-doc 'select(.kind != null) | .spec.variables[0].name' "${repo_root}/policies/best-practices/${sized_policy}.yaml" | sort -u)" \
+    "${sized#*:}" "every policy in ${sized_policy}.yaml must keep its values as its first variable (the consumer patch path)"
 done
+# The ReplicationController companion must apply the same defaults as the Pod policy.
+resource_defaults_expressions="$(yq -o=json -I=0 --no-doc 'select(.kind != null) | .spec.variables[0].expression' \
+  "${repo_root}/policies/best-practices/add-resource-defaults.yaml")"
+assert_equal "$(printf '%s\n' "${resource_defaults_expressions}" | wc -l | tr -d ' ')" "2" \
+  "add-resource-defaults.yaml must hold the Pod policy and its ReplicationController companion"
+assert_equal "$(printf '%s\n' "${resource_defaults_expressions}" | sort -u | wc -l | tr -d ' ')" "1" \
+  "add-resource-defaults and its ReplicationController companion must declare identical defaults"
 # The classic add-resource-defaults matched Pods and Kyverno generated its pod-controller rules; a
 # MutatingPolicy generates them only for the controllers it names.
-assert_equal "$(yq -r '.spec.autogen.podControllers.controllers | sort | join(",")' \
+assert_equal "$(yq -r --no-doc 'select(.metadata.name == "add-resource-defaults") | .spec.autogen.podControllers.controllers | sort | join(",")' \
   "${repo_root}/policies/best-practices/add-resource-defaults.yaml")" \
   "cronjobs,daemonsets,deployments,jobs,replicasets,statefulsets" \
   "add-resource-defaults must keep the classic policy's pod-controller coverage"
@@ -1323,6 +1330,16 @@ unchanged_after() {
     fi
   done
 }
+# A ServiceAccount created with generateName has no metadata.name at admission. The policy must
+# leave it alone without a CEL evaluation error, which would fail its admission.
+sa_apply_rc=0
+sa_apply_output="$(kyverno apply "${repo_root}/policies/best-practices/disable-default-sa-automount.yaml" \
+  --resource "${repo_root}/tests/disable-default-sa-automount/resources.yaml" --remove-color 2>&1)" || sa_apply_rc=$?
+if [[ "${sa_apply_rc}" -ne 0 ]] || ! grep -q 'error: 0,' <<<"${sa_apply_output}"; then
+  printf '%s\n' "${sa_apply_output}" >&2
+  echo "FAIL: disable-default-sa-automount must evaluate a generateName ServiceAccount without an error" >&2
+  exit 1
+fi
 unchanged_after "${repo_root}/policies/best-practices/disable-default-sa-automount.yaml" \
   "${repo_root}/tests/disable-default-sa-automount/resources.yaml" \
   ServiceAccount/apps/worker ServiceAccount/kube-system/default

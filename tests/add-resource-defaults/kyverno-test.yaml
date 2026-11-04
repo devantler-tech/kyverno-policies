@@ -1,6 +1,6 @@
 ---
 # add-resource-defaults on Pods and, through autogen, on Deployment, StatefulSet and CronJob pod
-# templates. Requests are added only to a container with no requests, limits only to one with no
+# templates, and its companion on a ReplicationController template. Requests are added only to a container with no requests, limits only to one with no
 # limits, and authored values (including a partial requests map) are never changed. The Pod in
 # kube-system reports Excluded, which a `skip` row cannot tell apart from a broken policy, so
 # scripts/test-policy-catalog.sh checks it with kyverno apply instead.
@@ -46,4 +46,13 @@ results:
       - apps/bare
     patchedResources: patched-resources.yaml
     kind: CronJob
+    result: pass
+  # The companion policy covers ReplicationController templates, which a MutatingPolicy cannot
+  # autogenerate: a limits-only container gets requests only, the bare init container both.
+  - policy: add-resource-defaults-replicationcontrollers
+    isMutatingPolicy: true
+    resources:
+      - apps/legacy-rc
+    patchedResources: patched-resources.yaml
+    kind: ReplicationController
     result: pass

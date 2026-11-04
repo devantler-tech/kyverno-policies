@@ -43,7 +43,7 @@ spec:
   matchConditions:
     - name: not-kubernetes-system-namespace
       expression: >-
-        !(object.metadata.name in ['kube-system', 'kube-public', 'kube-node-lease'])
+        !(object.metadata.?name.orValue('') in ['kube-system', 'kube-public', 'kube-node-lease'])
     # A terminating namespace rejects a new ResourceQuota, which Kyverno reports as a policy error.
     - name: not-terminating
       expression: "!has(object.metadata.deletionTimestamp)"

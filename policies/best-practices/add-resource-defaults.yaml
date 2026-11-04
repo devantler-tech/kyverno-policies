@@ -95,3 +95,83 @@ spec:
                 : optional.none()
             }
           }
+---
+# ReplicationController pod templates, which the classic policy reached through its generated
+# pod-controller rules but a MutatingPolicy cannot generate: the same defaults and the same
+# add-only-what-is-missing behaviour, on spec.template.spec. A separate policy because a
+# ReplicationController must be matched directly. Mutating its Pods later is not equivalent: for a
+# container with limits only, Kubernetes defaults the Pod's requests from those limits first.
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: add-resource-defaults-replicationcontrollers
+  annotations:
+    policies.kyverno.io/title: Add Container Resource Defaults to ReplicationControllers (MutatingPolicy)
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: ReplicationController
+    policies.kyverno.io/minversion: 1.19.0
+    policies.kyverno.io/description: >-
+      Adds default CPU and memory requests and limits to ReplicationController
+      pod template containers that declare none, without changing authored
+      values.
+spec:
+  evaluation:
+    background:
+      enabled: true
+    mutateExisting:
+      enabled: false
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["replicationcontrollers"]
+  matchConditions:
+    - name: not-kubernetes-system-namespace
+      expression: >-
+        !(object.metadata.?namespace.orValue('') in ['kube-system', 'kube-public', 'kube-node-lease'])
+  variables:
+    # Keep first, and keep equal to add-resource-defaults' defaults.
+    - name: defaults
+      expression: >-
+        {
+          "requests": {"cpu": "15m", "memory": "128Mi"},
+          "limits": {"cpu": "500m", "memory": "512Mi"}
+        }
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: >-
+          Object{
+            spec: Object.spec{
+              template: Object.spec.template{
+                spec: Object.spec.template.spec{
+                  containers: object.spec.template.spec.containers.filter(c,
+                      !c.?resources.?requests.hasValue() || !c.?resources.?limits.hasValue()
+                    ).map(c, Object.spec.template.spec.containers{
+                      name: c.name,
+                      resources: Object.spec.template.spec.containers.resources{
+                        ?requests: c.?resources.?requests.hasValue()
+                          ? optional.none() : optional.of(variables.defaults["requests"]),
+                        ?limits: c.?resources.?limits.hasValue()
+                          ? optional.none() : optional.of(variables.defaults["limits"])
+                      }
+                    }),
+                  ?initContainers: object.spec.template.spec.?initContainers.hasValue()
+                    ? optional.of(object.spec.template.spec.initContainers.filter(c,
+                        !c.?resources.?requests.hasValue() || !c.?resources.?limits.hasValue()
+                      ).map(c, Object.spec.template.spec.initContainers{
+                        name: c.name,
+                        resources: Object.spec.template.spec.initContainers.resources{
+                          ?requests: c.?resources.?requests.hasValue()
+                            ? optional.none() : optional.of(variables.defaults["requests"]),
+                          ?limits: c.?resources.?limits.hasValue()
+                            ? optional.none() : optional.of(variables.defaults["limits"])
+                        }
+                      }))
+                    : optional.none()
+                }
+              }
+            }
+          }

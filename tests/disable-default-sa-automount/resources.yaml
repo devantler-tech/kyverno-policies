@@ -1,6 +1,7 @@
 ---
 # A default ServiceAccount without the field, one that sets it to true, and one already false; a
-# ServiceAccount with another name and a default ServiceAccount in kube-system are left alone.
+# ServiceAccount with another name, one created with generateName (no name yet) and a default
+# ServiceAccount in kube-system are left alone.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -32,3 +33,9 @@ kind: ServiceAccount
 metadata:
   name: default
   namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  generateName: build-
+  namespace: apps

@@ -171,3 +171,28 @@ spec:
           containers:
             - name: app
               image: registry.k8s.io/pause:3.10
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: legacy-rc
+  namespace: apps
+spec:
+  replicas: 1
+  selector:
+    app: legacy-rc
+  template:
+    metadata:
+      labels:
+        app: legacy-rc
+    spec:
+      initContainers:
+        - name: setup
+          image: registry.k8s.io/pause:3.10
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi

@@ -2,6 +2,7 @@
 # platform's classic policy output on the same input (compared with kyverno apply when the policy
 # was ported, #47), except that the classic CLI moved a patched container ahead of its siblings
 # while this form keeps the authored order.
+# The ReplicationController is mutated by the companion add-resource-defaults-replicationcontrollers.
 ---
 apiVersion: v1
 kind: Pod
@@ -223,3 +224,38 @@ spec:
                   memory: 128Mi
           restartPolicy: Never
   schedule: 0 * * * *
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: legacy-rc
+  namespace: apps
+spec:
+  replicas: 1
+  selector:
+    app: legacy-rc
+  template:
+    metadata:
+      labels:
+        app: legacy-rc
+    spec:
+      containers:
+        - image: registry.k8s.io/pause:3.10
+          name: app
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: 15m
+              memory: 128Mi
+      initContainers:
+        - image: registry.k8s.io/pause:3.10
+          name: setup
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 15m
+              memory: 128Mi

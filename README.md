@@ -35,7 +35,7 @@ guide do not grant unrestricted reuse or redistribution rights.
 | [`add-default-limitrange`](policies/best-practices/add-default-limitrange.yaml) | Generates a `default-limitrange` LimitRange with per-container request and limit defaults in every namespace | Kyverno 1.19+ and Kyverno background-controller RBAC for LimitRanges; see [Platform default policies](#platform-default-policies) |
 | [`add-ns-quota`](policies/best-practices/add-ns-quota.yaml) | Generates a `default-resourcequota` ResourceQuota bounding requested CPU and memory in every namespace | Kyverno 1.19+ and Kyverno background-controller RBAC for ResourceQuotas |
 | [`add-recommended-labels`](policies/best-practices/add-recommended-labels-mutating-policy.yaml) | Adds missing Kubernetes identity labels to Deployments, StatefulSets, and DaemonSets without replacing authored values | Kyverno 1.19+ and admission processing that includes the target workload |
-| [`add-resource-defaults`](policies/best-practices/add-resource-defaults.yaml) | Adds default requests and limits to containers that declare none, in Pods and workload pod templates | Kyverno 1.19+ and admission processing that includes Pods and workload controllers |
+| [`add-resource-defaults`](policies/best-practices/add-resource-defaults.yaml) | Adds default requests and limits to containers that declare none, in Pods and workload pod templates (a companion policy in the same file covers ReplicationControllers) | Kyverno 1.19+ and admission processing that includes Pods and workload controllers |
 | [`audit-privileged-rbac`](policies/security/audit-privileged-rbac.yaml) | Denies Roles and ClusterRoles that grant wildcard administration or effective bind, escalate or impersonate permissions, except reviewed identities | Kyverno 1.19+, admission processing that includes RBAC objects, and the consumer's reviewed identities patched in (see [Platform validation policies](#platform-validation-policies)) |
 | [`auto-vpa`](policies/best-practices/auto-vpa-generating-policy.yaml) | Generates recommendation-bounded VPAs for Deployments, StatefulSets, and DaemonSets | Kyverno 1.19+, VPA 1.5+ with its CRD/controller, a `metrics.k8s.io` provider, and Kyverno background-controller RBAC for VPAs |
 | [`disable-default-sa-automount`](policies/best-practices/disable-default-sa-automount.yaml) | Turns off the API token mount on every namespace's `default` ServiceAccount, including existing ones | Kyverno 1.19+ and Kyverno background-controller RBAC to update ServiceAccounts |
@@ -264,7 +264,7 @@ What a consumer sets:
 |---|---|---|
 | `add-default-limitrange` | `limits`: the LimitRange's `default` and `defaultRequest` | limit 500m CPU / 512Mi, request 15m CPU / 128Mi |
 | `add-ns-quota` | `hard`: the ResourceQuota's `spec.hard` | `requests.cpu: "8"`, `requests.memory: 16Gi`; requests only, so an autoscaler that raises limits is never refused |
-| `add-resource-defaults` | `defaults`: the `requests` and `limits` added to a container without them | the LimitRange defaults above |
+| `add-resource-defaults` (and its `add-resource-defaults-replicationcontrollers` companion; patch both alike) | `defaults`: the `requests` and `limits` added to a container without them | the LimitRange defaults above |
 
 Replace `/spec/variables/0/expression` to change them, with a `test` operation on
 `/spec/variables/0/name` so the patch fails to apply if the catalog ever moves the variable. Every one of
