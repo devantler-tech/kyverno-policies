@@ -32,7 +32,7 @@ Consumer wiring and rollout remain separate changes in those repositories.
 - Document prerequisites such as CRDs, controller RBAC, Kyverno resource filters, and interacting
   autoscalers. Do not claim a policy reaches resources filtered out by the Kyverno installation.
 - Preserve backward-compatible behavior by default. An API migration or breaking output change needs its
-  own issue, exact parity tests, and a reversible consumer rollout.
+  own issue, exact parity tests, and a reversible consumer rollout. List its consumers first with the monorepo's [`consumer-census.sh`](https://github.com/devantler-tech/monorepo/blob/main/.claude/scripts/consumer-census.sh): from a monorepo checkout, `.claude/scripts/consumer-census.sh <policy name>` prints each consumer's `file:line`; an `UNKNOWN` repository was not searched, which is never zero consumers.
 - Never commit credentials, cluster-specific identities, private topology, or live security evidence.
 
 ## Validation
